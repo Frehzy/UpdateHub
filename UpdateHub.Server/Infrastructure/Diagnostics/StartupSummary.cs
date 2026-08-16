@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
+using UpdateHub.Server.Application.Manifest;
 using UpdateHub.Server.Infrastructure.Configuration;
 
 namespace UpdateHub.Server.Infrastructure.Diagnostics;
@@ -28,14 +29,18 @@ public static class StartupSummary
             .Features.Get<IServerAddressesFeature>()?.Addresses
             ?? [];
 
+        var state = app.Services.GetRequiredService<ManifestState>();
+        var inContainer = IsRunningInContainer();
+
         var report = new StringBuilder();
         report.Append("\nСервер обновлений UpdateHub запущен\n");
         report.Append("  Окружение:        ").Append(app.Environment.EnvironmentName).Append('\n');
-        report.Append("  Каталог раздачи:  ").Append(Path.GetFullPath(config.FilesPath)).Append('\n');
-        report.Append("  База данных:      ").Append(Path.GetFullPath(config.DatabasePath)).Append('\n');
-        report.Append("  Опрос каталога:   каждые ").Append(config.PollIntervalSeconds).Append(" с\n");
 
-        AppendAddresses(report, bound);
+        AppendFilesFolder(report, config, state, inContainer);
+
+        report.Append("  База данных:      ").Append(Path.GetFullPath(config.DatabasePath)).Append('\n');
+
+        AppendAddresses(report, bound, inContainer);
 
         if (app.Environment.IsDevelopment())
         {
@@ -50,11 +55,92 @@ public static class StartupSummary
     }
 
     /// <summary>
+    /// Добавляет в сводку раздел о каталоге, файлы из которого раздаются клиентам.
+    /// </summary>
+    /// <param name="report">Приёмник текста.</param>
+    /// <param name="config">Настройки раздачи.</param>
+    /// <param name="state">Состояние манифеста.</param>
+    /// <param name="inContainer">Признак запуска в контейнере.</param>
+    private static void AppendFilesFolder(
+        StringBuilder report,
+        UpdateHubConfig config,
+        ManifestState state,
+        bool inContainer)
+    {
+        var fullPath = Path.GetFullPath(config.FilesPath);
+
+        report.Append("  Каталог раздачи:  ").Append(fullPath).Append('\n');
+
+        if (inContainer)
+        {
+            // Внутри контейнера это точка монтирования. Какая папка Windows
+            // за ней стоит, знает только параметр -v команды docker run.
+            report.Append("                    (точка монтирования в контейнере; папка Windows задаётся параметром -v)\n");
+        }
+
+        if (!Directory.Exists(fullPath))
+        {
+            report.Append("                    ВНИМАНИЕ: каталог отсутствует\n");
+        }
+
+        report.Append("  Опрос каталога:   каждые ").Append(config.PollIntervalSeconds).Append(" с\n");
+
+        report.Append("  Состояние:        ");
+        if (state.LastScanCompletedAt is null)
+        {
+            report.Append("первый обход выполняется\n");
+        }
+        else
+        {
+            report.Append("файлов ").Append(state.EntryCount)
+                  .Append(", объём ").Append(FormatSize(state.TotalSizeBytes)).Append('\n');
+
+            if (state.RejectedPaths.Count > 0)
+            {
+                report.Append("                    отвергнуто файлов: ").Append(state.RejectedPaths.Count)
+                      .Append(" (подробности в /api/v1/admin/manifest/status)\n");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Переводит размер в байтах в удобочитаемый вид.
+    /// </summary>
+    /// <param name="bytes">Размер в байтах.</param>
+    /// <returns>Строка вида «6,8 ГБ».</returns>
+    private static string FormatSize(long bytes)
+    {
+        string[] units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+        double size = bytes;
+        var unit = 0;
+
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+
+        return unit == 0 ? $"{bytes} Б" : $"{size:0.#} {units[unit]}";
+    }
+
+    /// <summary>
+    /// Определяет, выполняется ли приложение внутри контейнера.
+    /// </summary>
+    /// <returns><see langword="true"/>, если это контейнер.</returns>
+    /// <remarks>Переменную выставляют официальные образы .NET.</remarks>
+    private static bool IsRunningInContainer()
+        => string.Equals(
+            Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Добавляет в сводку раздел с адресами, по которым сервер доступен клиентам.
     /// </summary>
     /// <param name="report">Приёмник текста.</param>
     /// <param name="bound">Адреса, на которых слушает Kestrel.</param>
-    private static void AppendAddresses(StringBuilder report, ICollection<string> bound)
+    /// <param name="inContainer">Признак запуска в контейнере.</param>
+    private static void AppendAddresses(StringBuilder report, ICollection<string> bound, bool inContainer)
     {
         if (bound.Count == 0)
         {
@@ -63,11 +149,6 @@ public static class StartupSummary
         }
 
         report.Append("  Слушает:          ").Append(string.Join(", ", bound)).Append('\n');
-
-        var inContainer = string.Equals(
-            Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
-            "true",
-            StringComparison.OrdinalIgnoreCase);
 
         if (bound.All(IsLoopbackOnly))
         {

@@ -36,9 +36,13 @@ public class ManifestScanBackgroundService(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var interval = TimeSpan.FromSeconds(Math.Max(5, _config.PollIntervalSeconds));
+
+        // Путь печатается абсолютным: относительный './files' из конфигурации
+        // разрешается от рабочего каталога процесса, и понять по нему, какая
+        // папка на самом деле раздаётся, невозможно.
         logger.LogInformation(
             "Сканер каталога запущен: {FilesPath}, опрос каждые {Interval} с",
-            _config.FilesPath,
+            Path.GetFullPath(_config.FilesPath),
             interval.TotalSeconds);
 
         // Первый обход выполняем сразу, чтобы манифест был готов к приходу клиентов.
