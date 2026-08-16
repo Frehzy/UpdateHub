@@ -117,3 +117,16 @@ app.MapHealthChecks("/health").AllowAnonymous();
 app.Lifetime.ApplicationStarted.Register(() => StartupSummary.Log(app));
 
 app.Run();
+
+/// <summary>
+/// Точка входа приложения.
+/// </summary>
+/// <remarks>
+/// Класс объявлен явно только ради тестов. Программа написана операторами
+/// верхнего уровня, и компилятор порождает для неё класс <c>Program</c>
+/// с внутренней областью видимости. Интеграционным тестам он нужен как
+/// параметр типа: <c>WebApplicationFactory&lt;Program&gt;</c> поднимает
+/// приложение целиком — с настоящей маршрутизацией, проверкой токенов
+/// и подготовкой базы, — и обращается к точке входа по имени типа.
+/// </remarks>
+public partial class Program;
