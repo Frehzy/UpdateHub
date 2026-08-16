@@ -11,8 +11,15 @@ public class RefreshTokenRepository(AppDbContext context)
     : BaseRepository<RefreshTokenEntity, string>(context), IRefreshTokenRepository
 {
     /// <inheritdoc />
+    /// <remarks>
+    /// Читает без отслеживания намеренно. Отзыв токенов выполняется одним
+    /// SQL-запросом через <c>ExecuteUpdate</c>, который меняет строки в базе,
+    /// но ничего не знает о копиях, уже загруженных в контекст. Обычное чтение
+    /// вернуло бы такую копию с устаревшим признаком отзыва, и отозванный
+    /// токен продолжил бы считаться действующим.
+    /// </remarks>
     public Task<RefreshTokenEntity?> GetByHashAsync(string tokenHash, CancellationToken cancellationToken = default)
-        => Set.FirstOrDefaultAsync(x => x.Token == tokenHash, cancellationToken);
+        => Set.AsNoTracking().FirstOrDefaultAsync(x => x.Token == tokenHash, cancellationToken);
 
     /// <inheritdoc />
     public Task<int> RevokeAllForUserAsync(string userId, CancellationToken cancellationToken = default)

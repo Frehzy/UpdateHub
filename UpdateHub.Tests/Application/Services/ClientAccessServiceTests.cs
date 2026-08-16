@@ -3,7 +3,7 @@ using UpdateHub.Server.Application.Repositories;
 using UpdateHub.Server.Application.Services;
 using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Entities;
-using UpdateHub.Server.Infrastructure.Database;
+using UpdateHub.Server.Domain.Enums;
 using UpdateHub.Tests.TestSupport;
 
 namespace UpdateHub.Tests.Application.Services;
@@ -27,33 +27,94 @@ public class ClientAccessServiceTests : IDisposable
     public ClientAccessServiceTests()
     {
         _database = new TestDatabase();
-        _service = CreateService(_database.Context);
-    }
+        var context = _database.Context;
 
-    /// <summary>Собирает службу поверх заданного контекста.</summary>
-    /// <param name="context">Контекст базы данных.</param>
-    /// <returns>Готовая служба.</returns>
-    private static ClientAccessService CreateService(AppDbContext context)
-        => new(
+        _service = new ClientAccessService(
             new ClientRepository(context),
             new UserClientAccessRepository(context),
             new UserGroupAccessRepository(context),
             new ClientBlockHistoryRepository(context),
             NullLogger<ClientAccessService>.Instance);
+    }
 
-    /// <summary>Заводит компьютер в базе.</summary>
-    /// <param name="id">Идентификатор компьютера.</param>
+    /// <summary>
+    /// Заводит пользователя.
+    /// </summary>
+    /// <param name="userId">Идентификатор пользователя.</param>
+    /// <returns>Идентификатор созданного пользователя.</returns>
+    /// <remarks>
+    /// Разрешения ссылаются на пользователя внешним ключом, поэтому без записи
+    /// в таблице пользователей вставка разрешения не проходит.
+    /// </remarks>
+    private async Task<string> AddUserAsync(string userId)
+    {
+        _database.Context.Users.Add(new UserEntity
+        {
+            Id = userId,
+            Username = userId,
+            PasswordHash = "не-проверяется-в-этих-тестах",
+            Role = UserRole.Client,
+            IsActive = true
+        });
+
+        await _database.Context.SaveChangesAsync();
+        return userId;
+    }
+
+    /// <summary>Заводит группу компьютеров.</summary>
+    /// <param name="groupId">Идентификатор группы.</param>
+    /// <param name="name">Название группы.</param>
+    private async Task AddGroupAsync(string groupId, string name)
+    {
+        _database.Context.Groups.Add(new GroupEntity { Id = groupId, Name = name });
+        await _database.Context.SaveChangesAsync();
+    }
+
+    /// <summary>Заводит компьютер.</summary>
+    /// <param name="clientId">Идентификатор компьютера.</param>
     /// <param name="groupId">Группа компьютера.</param>
     /// <param name="isActive">Признак активности.</param>
     /// <param name="isBlocked">Признак блокировки.</param>
-    private async Task AddClientAsync(string id, string? groupId = null, bool isActive = true, bool isBlocked = false)
+    private async Task AddClientAsync(
+        string clientId,
+        string? groupId = null,
+        bool isActive = true,
+        bool isBlocked = false)
     {
         _database.Context.Clients.Add(new ClientEntity
         {
-            Id = id,
+            Id = clientId,
             GroupId = groupId,
             IsActive = isActive,
             IsBlocked = isBlocked
+        });
+
+        await _database.Context.SaveChangesAsync();
+    }
+
+    /// <summary>Выдаёт пользователю персональное разрешение на компьютер.</summary>
+    /// <param name="userId">Идентификатор пользователя.</param>
+    /// <param name="clientId">Идентификатор компьютера.</param>
+    private async Task GrantClientAccessAsync(string userId, string clientId)
+    {
+        _database.Context.UserClientAccesses.Add(new UserClientAccessEntity
+        {
+            UserId = userId,
+            ClientId = clientId
+        });
+
+        await _database.Context.SaveChangesAsync();
+    }
+
+    /// <summary>Выдаёт пользователю разрешение на группу.</summary>
+    /// <param name="userId">Идентификатор пользователя.</param>
+    /// <param name="groupId">Идентификатор группы.</param>
+    private async Task GrantGroupAccessAsync(string userId, string groupId)
+    {
+        _database.Context.UserGroupAccesses.Add(new UserGroupAccessEntity
+        {
+            UserId = userId,
+            GroupId = groupId
         });
 
         await _database.Context.SaveChangesAsync();
@@ -65,9 +126,11 @@ public class ClientAccessServiceTests : IDisposable
     /// таблицу произвольными идентификаторами.
     /// </summary>
     [Fact]
-    public async Task AuthorizeAsync_НеизвестныйКомпьютер_Отклоняется()
+    public async Task AuthorizeAsync_UnknownClient_Rejected()
     {
-        var result = await _service.AuthorizeAsync("user-1", isAdmin: false, "нет-такого");
+        var userId = await AddUserAsync("user-1");
+
+        var result = await _service.AuthorizeAsync(userId, isAdmin: false, "нет-такого");
 
         Assert.False(result.IsAllowed);
         Assert.Equal(ClientAccessOutcome.UnknownClient, result.Outcome);
@@ -76,20 +139,23 @@ public class ClientAccessServiceTests : IDisposable
 
     /// <summary>Администратору незарегистрированный компьютер тоже недоступен.</summary>
     [Fact]
-    public async Task AuthorizeAsync_НеизвестныйКомпьютерУАдминистратора_Отклоняется()
+    public async Task AuthorizeAsync_UnknownClientForAdmin_Rejected()
     {
-        var result = await _service.AuthorizeAsync("admin-1", isAdmin: true, "нет-такого");
+        var adminId = await AddUserAsync("admin-1");
+
+        var result = await _service.AuthorizeAsync(adminId, isAdmin: true, "нет-такого");
 
         Assert.Equal(ClientAccessOutcome.UnknownClient, result.Outcome);
     }
 
     /// <summary>Помеченный удалённым компьютер считается несуществующим.</summary>
     [Fact]
-    public async Task AuthorizeAsync_УдалённыйКомпьютер_Отклоняется()
+    public async Task AuthorizeAsync_DeletedClient_Rejected()
     {
+        var userId = await AddUserAsync("user-1");
         await AddClientAsync("pc-1", isActive: false);
 
-        var result = await _service.AuthorizeAsync("user-1", isAdmin: true, "pc-1");
+        var result = await _service.AuthorizeAsync(userId, isAdmin: true, "pc-1");
 
         Assert.Equal(ClientAccessOutcome.UnknownClient, result.Outcome);
     }
@@ -100,11 +166,12 @@ public class ClientAccessServiceTests : IDisposable
     /// нигде, и заблокированный компьютер продолжал качать обновления.
     /// </summary>
     [Fact]
-    public async Task AuthorizeAsync_ЗаблокированныйКомпьютер_ОтклоняетсяДажеУАдминистратора()
+    public async Task AuthorizeAsync_BlockedClient_RejectedEvenForAdmin()
     {
+        var adminId = await AddUserAsync("admin-1");
         await AddClientAsync("pc-1", isBlocked: true);
 
-        var result = await _service.AuthorizeAsync("admin-1", isAdmin: true, "pc-1");
+        var result = await _service.AuthorizeAsync(adminId, isAdmin: true, "pc-1");
 
         Assert.False(result.IsAllowed);
         Assert.Equal(ClientAccessOutcome.Blocked, result.Outcome);
@@ -112,9 +179,11 @@ public class ClientAccessServiceTests : IDisposable
 
     /// <summary>Причина блокировки попадает в ответ, чтобы её увидел пользователь.</summary>
     [Fact]
-    public async Task AuthorizeAsync_ЗаблокированныйКомпьютер_ВозвращаетПричину()
+    public async Task AuthorizeAsync_BlockedClient_ReturnsBlockReason()
     {
+        var userId = await AddUserAsync("user-1");
         await AddClientAsync("pc-1", isBlocked: true);
+
         _database.Context.ClientBlockHistories.Add(new ClientBlockHistoryEntity
         {
             ClientId = "pc-1",
@@ -124,7 +193,7 @@ public class ClientAccessServiceTests : IDisposable
         });
         await _database.Context.SaveChangesAsync();
 
-        var result = await _service.AuthorizeAsync("user-1", isAdmin: false, "pc-1");
+        var result = await _service.AuthorizeAsync(userId, isAdmin: false, "pc-1");
 
         Assert.Equal(ClientAccessOutcome.Blocked, result.Outcome);
         Assert.Contains("выведен из эксплуатации", result.Reason!, StringComparison.Ordinal);
@@ -132,22 +201,24 @@ public class ClientAccessServiceTests : IDisposable
 
     /// <summary>Администратор получает доступ к любому незаблокированному компьютеру.</summary>
     [Fact]
-    public async Task AuthorizeAsync_Администратор_ПолучаетДоступБезЯвныхПрав()
+    public async Task AuthorizeAsync_Admin_AllowedWithoutExplicitGrant()
     {
+        var adminId = await AddUserAsync("admin-1");
         await AddClientAsync("pc-1");
 
-        var result = await _service.AuthorizeAsync("admin-1", isAdmin: true, "pc-1");
+        var result = await _service.AuthorizeAsync(adminId, isAdmin: true, "pc-1");
 
         Assert.True(result.IsAllowed);
     }
 
     /// <summary>Пользователь без прав получает отказ.</summary>
     [Fact]
-    public async Task AuthorizeAsync_ПользовательБезПрав_ПолучаетОтказ()
+    public async Task AuthorizeAsync_UserWithoutGrant_Forbidden()
     {
+        var userId = await AddUserAsync("user-1");
         await AddClientAsync("pc-1");
 
-        var result = await _service.AuthorizeAsync("user-1", isAdmin: false, "pc-1");
+        var result = await _service.AuthorizeAsync(userId, isAdmin: false, "pc-1");
 
         Assert.False(result.IsAllowed);
         Assert.Equal(ClientAccessOutcome.Forbidden, result.Outcome);
@@ -155,13 +226,13 @@ public class ClientAccessServiceTests : IDisposable
 
     /// <summary>Персональное разрешение открывает доступ к компьютеру.</summary>
     [Fact]
-    public async Task AuthorizeAsync_ПерсональноеРазрешение_ОткрываетДоступ()
+    public async Task AuthorizeAsync_DirectGrant_AllowsAccess()
     {
+        var userId = await AddUserAsync("user-1");
         await AddClientAsync("pc-1");
-        _database.Context.UserClientAccesses.Add(new UserClientAccessEntity { UserId = "user-1", ClientId = "pc-1" });
-        await _database.Context.SaveChangesAsync();
+        await GrantClientAccessAsync(userId, "pc-1");
 
-        var result = await _service.AuthorizeAsync("user-1", isAdmin: false, "pc-1");
+        var result = await _service.AuthorizeAsync(userId, isAdmin: false, "pc-1");
 
         Assert.True(result.IsAllowed);
     }
@@ -171,16 +242,14 @@ public class ClientAccessServiceTests : IDisposable
     /// ради этого группы и заведены.
     /// </summary>
     [Fact]
-    public async Task AuthorizeAsync_РазрешениеНаГруппу_ОткрываетДоступКЕёКомпьютерам()
+    public async Task AuthorizeAsync_GroupGrant_AllowsAccessToGroupClients()
     {
-        _database.Context.Groups.Add(new GroupEntity { Id = "group-1", Name = "Бухгалтерия" });
-        await _database.Context.SaveChangesAsync();
+        var userId = await AddUserAsync("user-1");
+        await AddGroupAsync("group-1", "Бухгалтерия");
         await AddClientAsync("pc-1", groupId: "group-1");
+        await GrantGroupAccessAsync(userId, "group-1");
 
-        _database.Context.UserGroupAccesses.Add(new UserGroupAccessEntity { UserId = "user-1", GroupId = "group-1" });
-        await _database.Context.SaveChangesAsync();
-
-        var result = await _service.AuthorizeAsync("user-1", isAdmin: false, "pc-1");
+        var result = await _service.AuthorizeAsync(userId, isAdmin: false, "pc-1");
 
         Assert.True(result.IsAllowed);
     }
@@ -190,41 +259,54 @@ public class ClientAccessServiceTests : IDisposable
     /// Проверка парная к предыдущей: важно, что права не «протекают».
     /// </summary>
     [Fact]
-    public async Task AuthorizeAsync_РазрешениеНаДругуюГруппу_ДоступНеОткрывает()
+    public async Task AuthorizeAsync_GrantForAnotherGroup_DoesNotAllowAccess()
     {
-        _database.Context.Groups.Add(new GroupEntity { Id = "group-1", Name = "Бухгалтерия" });
-        _database.Context.Groups.Add(new GroupEntity { Id = "group-2", Name = "Склад" });
-        await _database.Context.SaveChangesAsync();
+        var userId = await AddUserAsync("user-1");
+        await AddGroupAsync("group-1", "Бухгалтерия");
+        await AddGroupAsync("group-2", "Склад");
         await AddClientAsync("pc-1", groupId: "group-2");
+        await GrantGroupAccessAsync(userId, "group-1");
 
-        _database.Context.UserGroupAccesses.Add(new UserGroupAccessEntity { UserId = "user-1", GroupId = "group-1" });
-        await _database.Context.SaveChangesAsync();
-
-        var result = await _service.AuthorizeAsync("user-1", isAdmin: false, "pc-1");
+        var result = await _service.AuthorizeAsync(userId, isAdmin: false, "pc-1");
 
         Assert.Equal(ClientAccessOutcome.Forbidden, result.Outcome);
     }
 
     /// <summary>Пользователь без единого разрешения не проходит общую проверку.</summary>
     [Fact]
-    public async Task HasAnyAccessAsync_БезРазрешений_ВозвращаетЛожь()
+    public async Task HasAnyAccessAsync_NoGrants_ReturnsFalse()
     {
-        Assert.False(await _service.HasAnyAccessAsync("user-1"));
+        var userId = await AddUserAsync("user-1");
+
+        Assert.False(await _service.HasAnyAccessAsync(userId));
     }
 
-    /// <summary>Достаточно одного разрешения — персонального или на группу.</summary>
+    /// <summary>Достаточно персонального разрешения на компьютер.</summary>
     [Fact]
-    public async Task HasAnyAccessAsync_ЕстьРазрешение_ВозвращаетИстину()
+    public async Task HasAnyAccessAsync_DirectGrant_ReturnsTrue()
     {
+        var userId = await AddUserAsync("user-1");
         await AddClientAsync("pc-1");
-        _database.Context.UserClientAccesses.Add(new UserClientAccessEntity { UserId = "user-1", ClientId = "pc-1" });
-        _database.Context.UserGroupAccesses.Add(new UserGroupAccessEntity { UserId = "user-2", GroupId = "group-1" });
-        await _database.Context.SaveChangesAsync();
+        await GrantClientAccessAsync(userId, "pc-1");
 
-        Assert.True(await _service.HasAnyAccessAsync("user-1"));
-        Assert.True(await _service.HasAnyAccessAsync("user-2"));
+        Assert.True(await _service.HasAnyAccessAsync(userId));
+    }
+
+    /// <summary>Достаточно разрешения на группу, даже если в ней пока нет компьютеров.</summary>
+    [Fact]
+    public async Task HasAnyAccessAsync_GroupGrant_ReturnsTrue()
+    {
+        var userId = await AddUserAsync("user-2");
+        await AddGroupAsync("group-1", "Бухгалтерия");
+        await GrantGroupAccessAsync(userId, "group-1");
+
+        Assert.True(await _service.HasAnyAccessAsync(userId));
     }
 
     /// <summary>Освобождает базу.</summary>
-    public void Dispose() => _database.Dispose();
+    public void Dispose()
+    {
+        _database.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

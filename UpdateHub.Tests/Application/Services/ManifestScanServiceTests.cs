@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using System.Text;
 using UpdateHub.Server.Application.Manifest;
 using UpdateHub.Server.Application.Repositories;
 using UpdateHub.Server.Application.Services;
+using UpdateHub.Server.Domain.Enums;
 using UpdateHub.Server.Infrastructure.Configuration;
 using UpdateHub.Tests.TestSupport;
 
@@ -59,11 +59,16 @@ public class ManifestScanServiceTests : IDisposable
     /// порога «отстаивания» делает файл готовым к обработке, меньше — отложенным.
     /// Время задаётся явно, чтобы тест не зависел от скорости машины.
     /// </param>
+    /// <remarks>
+    /// Кодировка не указывается намеренно: перегрузка без неё пишет UTF-8
+    /// без метки порядка байтов. С явным <c>Encoding.UTF8</c> метка попадала бы
+    /// в файл, меняя и его размер, и контрольную сумму.
+    /// </remarks>
     private void WriteFile(string relativePath, string content, int ageSeconds = 60)
     {
         var fullPath = Path.Combine(_filesPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        File.WriteAllText(fullPath, content, Encoding.UTF8);
+        File.WriteAllText(fullPath, content);
         File.SetLastWriteTimeUtc(fullPath, DateTime.UtcNow.AddSeconds(-ageSeconds));
     }
 
@@ -77,7 +82,7 @@ public class ManifestScanServiceTests : IDisposable
 
     /// <summary>Обычный файл попадает в манифест с верной контрольной суммой.</summary>
     [Fact]
-    public async Task ScanAsync_ОбычныйФайл_ПопадаетВМанифест()
+    public async Task ScanAsync_PlainFile_AddedToManifest()
     {
         WriteFile("a.txt", "hello");
 
@@ -86,14 +91,13 @@ public class ManifestScanServiceTests : IDisposable
         Assert.True(result.Executed);
         Assert.Equal(1, result.TotalFiles);
 
-        var manifest = ReadManifest();
         // MD5 строки "hello" — известное значение, его удобно проверить напрямую.
-        Assert.Equal("5d41402abc4b2a76b9719d911017c592", manifest["a.txt"]);
+        Assert.Equal("5d41402abc4b2a76b9719d911017c592", ReadManifest()["a.txt"]);
     }
 
     /// <summary>Файлы во вложенных каталогах попадают в манифест с прямыми слэшами.</summary>
     [Fact]
-    public async Task ScanAsync_ВложенныйКаталог_ПутьСПрямымиСлэшами()
+    public async Task ScanAsync_NestedDirectory_PathUsesForwardSlashes()
     {
         WriteFile("bin/tools/app.bin", "содержимое");
 
@@ -108,7 +112,7 @@ public class ManifestScanServiceTests : IDisposable
     /// и клиенты перекачивали бы его бесконечно, никогда не сходясь по сумме.
     /// </summary>
     [Fact]
-    public async Task ScanAsync_ТолькоЧтоИзменённыйФайл_Откладывается()
+    public async Task ScanAsync_RecentlyModifiedFile_Deferred()
     {
         WriteFile("копируется.iso", "часть данных", ageSeconds: 0);
 
@@ -124,7 +128,7 @@ public class ManifestScanServiceTests : IDisposable
     /// получали бы отказ при попытке его скачать.
     /// </summary>
     [Fact]
-    public async Task ScanAsync_ПерезаписываемыйФайл_ОстаётсяВМанифесте()
+    public async Task ScanAsync_FileBeingRewritten_StaysInManifest()
     {
         WriteFile("a.txt", "старое содержимое");
         await _service.ScanAsync();
@@ -145,7 +149,7 @@ public class ManifestScanServiceTests : IDisposable
     /// образ целиком через медленный проброс папки Windows.
     /// </summary>
     [Fact]
-    public async Task ScanAsync_ПовторныйОбходБезИзменений_НеПересчитываетСуммы()
+    public async Task ScanAsync_SecondScanWithoutChanges_SkipsHashing()
     {
         WriteFile("a.txt", "hello");
         WriteFile("b.txt", "world");
@@ -162,7 +166,7 @@ public class ManifestScanServiceTests : IDisposable
 
     /// <summary>Изменённое содержимое обновляет сумму в манифесте.</summary>
     [Fact]
-    public async Task ScanAsync_СодержимоеИзменилось_СуммаОбновляется()
+    public async Task ScanAsync_ContentChanged_HashUpdated()
     {
         WriteFile("a.txt", "hello");
         await _service.ScanAsync();
@@ -176,7 +180,7 @@ public class ManifestScanServiceTests : IDisposable
 
     /// <summary>Удалённый с диска файл убирается из манифеста.</summary>
     [Fact]
-    public async Task ScanAsync_ФайлУдалёнСДиска_УбираетсяИзМанифеста()
+    public async Task ScanAsync_FileDeletedFromDisk_RemovedFromManifest()
     {
         WriteFile("a.txt", "hello");
         WriteFile("b.txt", "world");
@@ -196,14 +200,13 @@ public class ManifestScanServiceTests : IDisposable
     /// выбор одного из них зависел бы от порядка обхода каталога.
     /// </summary>
     [Fact]
-    public async Task ScanAsync_КонфликтРегистра_ОбеСтороныОтбрасываются()
+    public async Task ScanAsync_CaseCollision_BothSidesRejected()
     {
         WriteFile("Doc.txt", "первый");
 
         // На файловых системах, не различающих регистр, второй файл просто
         // перезапишет первый — тогда конфликта нет и проверять нечего.
-        var secondPath = Path.Combine(_filesPath, "doc.txt");
-        if (File.Exists(secondPath))
+        if (File.Exists(Path.Combine(_filesPath, "doc.txt")))
         {
             return;
         }
@@ -219,7 +222,7 @@ public class ManifestScanServiceTests : IDisposable
 
     /// <summary>Отсутствующий каталог создаётся, а обход завершается без ошибки.</summary>
     [Fact]
-    public async Task ScanAsync_КаталогаНет_СоздаётсяИОбходПроходит()
+    public async Task ScanAsync_MissingDirectory_CreatedAndScanSucceeds()
     {
         Directory.Delete(_filesPath, recursive: true);
 
@@ -232,7 +235,7 @@ public class ManifestScanServiceTests : IDisposable
 
     /// <summary>Итоги обхода попадают в общее состояние манифеста.</summary>
     [Fact]
-    public async Task ScanAsync_ОбновляетОбщееСостояние()
+    public async Task ScanAsync_UpdatesSharedState()
     {
         WriteFile("a.txt", "hello");
 
@@ -249,7 +252,7 @@ public class ManifestScanServiceTests : IDisposable
     /// «содержимое каталога поменялось», а не «прошёл очередной опрос».
     /// </summary>
     [Fact]
-    public async Task ScanAsync_ОбходБезИзменений_НеУвеличиваетПоколение()
+    public async Task ScanAsync_ScanWithoutChanges_GenerationUnchanged()
     {
         WriteFile("a.txt", "hello");
         await _service.ScanAsync();
@@ -262,7 +265,7 @@ public class ManifestScanServiceTests : IDisposable
 
     /// <summary>История изменений файлов пополняется при добавлении и удалении.</summary>
     [Fact]
-    public async Task ScanAsync_ИзмененияПопадаютВИсторию()
+    public async Task ScanAsync_ChangesRecordedInHistory()
     {
         WriteFile("a.txt", "hello");
         await _service.ScanAsync();
@@ -274,8 +277,8 @@ public class ManifestScanServiceTests : IDisposable
         var changes = context.FileChanges.OrderBy(c => c.Id).ToList();
 
         Assert.Equal(2, changes.Count);
-        Assert.Equal(UpdateHub.Server.Domain.Enums.FileChangeType.Created, changes[0].ChangeType);
-        Assert.Equal(UpdateHub.Server.Domain.Enums.FileChangeType.Deleted, changes[1].ChangeType);
+        Assert.Equal(FileChangeType.Created, changes[0].ChangeType);
+        Assert.Equal(FileChangeType.Deleted, changes[1].ChangeType);
     }
 
     /// <summary>Освобождает базу и временный каталог.</summary>
@@ -294,5 +297,7 @@ public class ManifestScanServiceTests : IDisposable
         {
             // Уборка временного каталога не должна ронять прогон тестов.
         }
+
+        GC.SuppressFinalize(this);
     }
 }

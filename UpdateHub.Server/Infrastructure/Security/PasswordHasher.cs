@@ -24,11 +24,14 @@ public class PasswordHasher(int workFactor = 12)
     public bool VerifyPassword(string password, string hash)
     {
         // Повреждённый или пустой хэш в базе не должен ронять вход целиком.
+        // Пустая строка даёт ArgumentException, а испорченная соль —
+        // SaltParseException: ловить нужно оба, иначе одна битая запись
+        // в таблице пользователей делает недоступным весь вход в систему.
         try
         {
             return BCryptNet.Verify(password, hash);
         }
-        catch (BCrypt.Net.SaltParseException)
+        catch (Exception ex) when (ex is BCrypt.Net.SaltParseException or ArgumentException or FormatException)
         {
             return false;
         }

@@ -20,7 +20,7 @@ public class ManifestFormatTests
     /// сумма, два пробела, путь.
     /// </summary>
     [Fact]
-    public void Parse_ОбычнаяСтрока_ВозвращаетПутьИСумму()
+    public void Parse_PlainLine_ReturnsPathAndHash()
     {
         var result = ManifestFormat.Parse("d41d8cd98f00b204e9800998ecf8427e  bin/app", NoLimit);
 
@@ -35,7 +35,7 @@ public class ManifestFormatTests
     /// и отвергать его — значит ломать клиентов на ровном месте.
     /// </summary>
     [Fact]
-    public void Parse_ДвоичныйРежим_РазбираетсяТакЖе()
+    public void Parse_BinaryModeMarker_ParsedTheSameWay()
     {
         var result = ManifestFormat.Parse("d41d8cd98f00b204e9800998ecf8427e *bin/app", NoLimit);
 
@@ -48,7 +48,7 @@ public class ManifestFormatTests
     /// а сравнение с манифестом сервера идёт по строке.
     /// </summary>
     [Fact]
-    public void Parse_СуммаВВерхнемРегистре_ПриводитсяКНижнему()
+    public void Parse_UpperCaseHash_NormalizedToLowerCase()
     {
         var result = ManifestFormat.Parse("D41D8CD98F00B204E9800998ECF8427E  bin/app", NoLimit);
 
@@ -63,7 +63,7 @@ public class ManifestFormatTests
     [InlineData("docs/файл с пробелом.txt")]
     [InlineData("документы/отчёт.pdf")]
     [InlineData("dir/sub dir/a b c.bin")]
-    public void Parse_ПробелыИКириллица_СохраняютсяВПути(string path)
+    public void Parse_SpacesAndCyrillicInPath_Preserved(string path)
     {
         var result = ManifestFormat.Parse($"d41d8cd98f00b204e9800998ecf8427e  {path}", NoLimit);
 
@@ -76,7 +76,7 @@ public class ManifestFormatTests
     /// скрипт вправе добавить их в свой манифест.
     /// </summary>
     [Fact]
-    public void Parse_ПустыеСтрокиИКомментарии_Игнорируются()
+    public void Parse_BlankLinesAndComments_Ignored()
     {
         var content = "# заголовок\n\nd41d8cd98f00b204e9800998ecf8427e  a.txt\n\n";
 
@@ -91,7 +91,7 @@ public class ManifestFormatTests
     /// «возврат каретки и перевод строки»: манифест мог быть создан на Windows.
     /// </summary>
     [Fact]
-    public void Parse_ПереводСтрокиWindows_РазбираетсяКорректно()
+    public void Parse_WindowsLineEndings_ParsedCorrectly()
     {
         var content = "d41d8cd98f00b204e9800998ecf8427e  a.txt\r\n5d41402abc4b2a76b9719d911017c592  b.txt\r\n";
 
@@ -107,7 +107,7 @@ public class ManifestFormatTests
     /// замечаний разом, чем останавливаться на первой плохой строке.
     /// </summary>
     [Fact]
-    public void Parse_НевернаяСумма_ОтмечаетсяНоРазборПродолжается()
+    public void Parse_MalformedHash_ReportedButParsingContinues()
     {
         var content = "не-сумма-вообще-совсем-никак-нет  a.txt\nd41d8cd98f00b204e9800998ecf8427e  b.txt";
 
@@ -124,7 +124,7 @@ public class ManifestFormatTests
     /// такую строку — значит разъехаться с клиентом в разборе.
     /// </summary>
     [Fact]
-    public void Parse_ЭкранированныйПуть_Отвергается()
+    public void Parse_EscapedPath_Rejected()
     {
         var result = ManifestFormat.Parse(@"\d41d8cd98f00b204e9800998ecf8427e  a\nb.txt", NoLimit);
 
@@ -133,14 +133,14 @@ public class ManifestFormatTests
     }
 
     /// <summary>
-    /// Отвергает попытку выйти за пределы каталога. До обращения к файловой
-    /// системе такой путь дойти не должен.
+    /// Отвергает попытку выйти за пределы каталога и абсолютные пути.
+    /// До обращения к файловой системе такой путь дойти не должен.
     /// </summary>
     [Theory]
     [InlineData("../secret.txt")]
     [InlineData("dir/../../etc/passwd")]
     [InlineData("/etc/passwd")]
-    public void Parse_ВыходЗаПределыКаталога_Отвергается(string path)
+    public void Parse_PathOutsideRoot_Rejected(string path)
     {
         var result = ManifestFormat.Parse($"d41d8cd98f00b204e9800998ecf8427e  {path}", NoLimit);
 
@@ -153,7 +153,7 @@ public class ManifestFormatTests
     /// молча затирать одно другим нельзя, результат зависел бы от порядка строк.
     /// </summary>
     [Fact]
-    public void Parse_ПовторяющийсяПуть_БерётПервоеВхождениеИОтмечаетОстальные()
+    public void Parse_DuplicatePath_KeepsFirstAndReportsRest()
     {
         var content = "d41d8cd98f00b204e9800998ecf8427e  a.txt\n5d41402abc4b2a76b9719d911017c592  a.txt";
 
@@ -168,7 +168,7 @@ public class ManifestFormatTests
     /// извне, и его размер должен быть ограничен.
     /// </summary>
     [Fact]
-    public void Parse_ПревышенПределЗаписей_РазборПрерывается()
+    public void Parse_EntryLimitExceeded_ParsingStops()
     {
         var content = string.Join('\n', Enumerable.Range(0, 10)
             .Select(i => $"d41d8cd98f00b204e9800998ecf842{i:00}  file{i}.txt"));
@@ -184,7 +184,7 @@ public class ManifestFormatTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void Parse_ПустойМанифест_ДаётПустойРезультатБезОшибок(string? content)
+    public void Parse_EmptyManifest_ReturnsEmptyResultWithoutErrors(string? content)
     {
         var result = ManifestFormat.Parse(content, NoLimit);
 
@@ -197,7 +197,7 @@ public class ManifestFormatTests
     /// два пробела между суммой и путём и перевод строки в конце.
     /// </summary>
     [Fact]
-    public void AppendLine_ПишетСтрокуВФорматеMd5sum()
+    public void AppendLine_WritesLineInMd5sumFormat()
     {
         var builder = new System.Text.StringBuilder();
 
@@ -211,7 +211,7 @@ public class ManifestFormatTests
     /// без потерь. Иначе клиент не сможет свериться собственным манифестом.
     /// </summary>
     [Fact]
-    public void ЗаписьИРазбор_ВзаимноОбратимы()
+    public void AppendLineAndParse_AreMutuallyInverse()
     {
         var builder = new System.Text.StringBuilder();
         ManifestFormat.AppendLine(builder, "d41d8cd98f00b204e9800998ecf8427e", "каталог/файл с пробелом.bin");
