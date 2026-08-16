@@ -1,8 +1,8 @@
-using System.Diagnostics;
-using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
+using System.Text;
 using UpdateHub.Server.Application.Abstractions.Services;
 using UpdateHub.Server.Application.Manifest;
 using UpdateHub.Server.Application.Sync;

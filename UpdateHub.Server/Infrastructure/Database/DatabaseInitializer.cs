@@ -1,11 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Domain.Enums;
 using UpdateHub.Server.Infrastructure.Configuration;
 using UpdateHub.Server.Infrastructure.Security;
-using Microsoft.Extensions.Options;
-using System.Security.Cryptography;
 
 namespace UpdateHub.Server.Infrastructure.Database;
 

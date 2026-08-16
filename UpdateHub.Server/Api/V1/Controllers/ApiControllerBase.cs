@@ -1,6 +1,6 @@
+using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.AspNetCore.Mvc;
 using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Enums;
 

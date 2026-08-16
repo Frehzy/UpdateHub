@@ -1,8 +1,8 @@
-using System.IO.Compression;
-using System.Reflection;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.ResponseCompression;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
+using System.IO.Compression;
+using System.Reflection;
 using UpdateHub.Server.Api.V1.Mappers;
 using UpdateHub.Server.Infrastructure.Database;
 using UpdateHub.Server.Infrastructure.Extensions;

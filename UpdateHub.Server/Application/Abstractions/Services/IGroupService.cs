@@ -1,4 +1,5 @@
 using UpdateHub.Server.Api.V1.DTOs.Response;
+using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Entities;
 
 namespace UpdateHub.Server.Application.Abstractions.Services;
