@@ -58,6 +58,27 @@ public class AuthService(
 
         var isAdmin = user.Role == UserRole.Admin;
 
+        // Вход без указания компьютера — режим панели управления. Он обязателен,
+        // иначе система неразрешима: на пустой базе нет ни одного компьютера,
+        // и администратор, созданный при первом запуске, не смог бы войти,
+        // чтобы завести первый компьютер или рассмотреть заявку на регистрацию.
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            // Обычному пользователю такой токен выдаётся только если ему выданы
+            // права хоть на что-то: иначе он всё равно бесполезен.
+            if (!isAdmin && !await clientAccessService.HasAnyAccessAsync(user.Id, cancellationToken))
+            {
+                throw new AuthenticationFailedException(
+                    "У вас нет прав ни на один компьютер. Обратитесь к администратору");
+            }
+
+            user.LastLogin = DateTime.UtcNow;
+            await userRepository.UpdateAsync(user, cancellationToken);
+
+            logger.LogInformation("Пользователь {Username} вошёл без привязки к компьютеру", user.Username);
+            return await IssueTokensAsync(user, null, context, cancellationToken);
+        }
+
         // Проверка компьютера идёт до любых изменений в базе: неизвестный
         // идентификатор не должен приводить к появлению новой записи о клиенте.
         var access = await clientAccessService.AuthorizeAsync(user.Id, isAdmin, clientId, cancellationToken);

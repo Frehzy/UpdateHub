@@ -24,10 +24,17 @@ public class LoginRequestDto
     [FromForm(Name = "password")]
     public string Password { get; set; } = string.Empty;
 
-    /// <summary>Идентификатор компьютера из <c>/etc/updatehub/client-id</c>.</summary>
-    [Required(ErrorMessage = "Не указан идентификатор компьютера")]
+    /// <summary>
+    /// Идентификатор компьютера из <c>/etc/updatehub/client-id</c>.
+    /// </summary>
+    /// <remarks>
+    /// Обязателен для скрипта обновления: без него токен не будет привязан
+    /// к компьютеру. Для входа в панель управления поле можно не заполнять —
+    /// иначе администратор не смог бы войти на пустой базе, где нет ещё
+    /// ни одного зарегистрированного компьютера.
+    /// </remarks>
     [FromForm(Name = "client_id")]
-    public string ClientId { get; set; } = string.Empty;
+    public string? ClientId { get; set; }
 
     /// <summary>Сетевое имя компьютера.</summary>
     [FromForm(Name = "hostname")]
