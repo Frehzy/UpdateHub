@@ -42,7 +42,7 @@ public class ManifestScanBackgroundService(
         // папка на самом деле раздаётся, невозможно.
         logger.LogInformation(
             "Сканер каталога запущен: {FilesPath}, опрос каждые {Interval} с",
-            Path.GetFullPath(_config.FilesPath),
+            _config.ResolvedFilesPath,
             interval.TotalSeconds);
 
         // Первый обход выполняем сразу, чтобы манифест был готов к приходу клиентов.

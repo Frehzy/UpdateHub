@@ -30,7 +30,6 @@ builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 // На канале 2 Мбит/с это заметно; клиенту достаточно флага curl --compressed.
 builder.Services.AddResponseCompression(options =>
 {
-    options.EnableForHttps = true;
     options.Providers.Add<GzipCompressionProvider>();
     options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["text/plain"]);
 });

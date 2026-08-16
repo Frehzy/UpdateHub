@@ -38,7 +38,7 @@ public static class StartupSummary
 
         AppendFilesFolder(report, config, state, inContainer);
 
-        report.Append("  База данных:      ").Append(Path.GetFullPath(config.DatabasePath)).Append('\n');
+        report.Append("  База данных:      ").Append(config.ResolvedDatabasePath).Append('\n');
 
         AppendAddresses(report, bound, inContainer);
 
@@ -67,7 +67,7 @@ public static class StartupSummary
         ManifestState state,
         bool inContainer)
     {
-        var fullPath = Path.GetFullPath(config.FilesPath);
+        var fullPath = config.ResolvedFilesPath;
 
         report.Append("  Каталог раздачи:  ").Append(fullPath).Append('\n');
 
