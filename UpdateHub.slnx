@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="UpdateHub.Server/UpdateHub.Server.csproj" />
+  <Project Path="UpdateHub.Tests/UpdateHub.Tests.csproj" Id="7f3029b8-ad8a-4973-8eb7-30950425b1ed" />
 </Solution>
