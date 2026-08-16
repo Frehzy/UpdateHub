@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 using UpdateHub.Server.Application.Abstractions.Repositories;
@@ -61,24 +64,82 @@ public class DatabaseInitializer(
     /// </summary>
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <remarks>
-    /// Пока в сборке нет ни одной миграции, схема создаётся напрямую по модели.
-    /// Как только миграции появятся (<c>dotnet ef migrations add Initial</c>),
-    /// этот же код автоматически переключится на <c>Migrate</c> — менять ничего не нужно.
+    /// Если в сборке нет ни одной миграции, схема создаётся напрямую по модели —
+    /// это запасной путь, он оставлен на случай, когда миграции по какой-то
+    /// причине не попали в сборку.
     /// </remarks>
     private async Task ApplySchemaAsync(CancellationToken cancellationToken)
     {
-        if (context.Database.GetMigrations().Any())
-        {
-            logger.LogInformation("Применение миграций базы данных");
-            await context.Database.MigrateAsync(cancellationToken);
-        }
-        else
+        var migrations = context.Database.GetMigrations().ToList();
+        if (migrations.Count == 0)
         {
             logger.LogWarning(
                 "Миграции не найдены, схема создаётся по модели. " +
                 "Выполните 'dotnet ef migrations add Initial', чтобы изменения схемы не требовали удаления базы");
             await context.Database.EnsureCreatedAsync(cancellationToken);
+            return;
         }
+
+        await AdoptSchemaCreatedWithoutMigrationsAsync(migrations[0], cancellationToken);
+
+        var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
+        if (pending.Count == 0)
+        {
+            logger.LogInformation("Схема базы данных актуальна");
+            return;
+        }
+
+        logger.LogInformation("Применение миграций: {Migrations}", string.Join(", ", pending));
+        await context.Database.MigrateAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Помечает первую миграцию как применённую, если база была создана
+    /// прежней версией сервера — вызовом <c>EnsureCreated</c>.
+    /// </summary>
+    /// <param name="firstMigrationId">Идентификатор первой миграции.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <remarks>
+    /// <c>EnsureCreated</c> строит схему, но не ведёт журнал применённых
+    /// миграций. Для <c>Migrate</c> такая база выглядит пустой: он попытается
+    /// создать таблицы заново и упадёт на «table Users already exists», а сервер
+    /// не запустится. Разбираться с этим на площадке без интернета, где базу
+    /// нельзя просто удалить вместе с учётными записями и историей, — плохой
+    /// сценарий, поэтому переход выполняется здесь и один раз.
+    /// <para>
+    /// Схема, построенная <c>EnsureCreated</c> по той же модели, совпадает с
+    /// результатом первой миграции — тест <c>MigrationsTests</c> сравнивает их
+    /// таблица за таблицей, — поэтому запись в журнал безопасна: применять
+    /// первую миграцию поверх существующих таблиц не требуется.
+    /// </para>
+    /// </remarks>
+    private async Task AdoptSchemaCreatedWithoutMigrationsAsync(
+        string firstMigrationId,
+        CancellationToken cancellationToken)
+    {
+        var history = context.GetService<IHistoryRepository>();
+        if (await history.ExistsAsync(cancellationToken))
+        {
+            return;
+        }
+
+        var creator = context.GetService<IRelationalDatabaseCreator>();
+        if (!await creator.HasTablesAsync(cancellationToken))
+        {
+            return;
+        }
+
+        logger.LogWarning(
+            "База создана без миграций. Миграция {MigrationId} отмечается как применённая, " +
+            "существующие данные сохраняются",
+            firstMigrationId);
+
+        var version = typeof(DbContext).Assembly.GetName().Version?.ToString() ?? "unknown";
+
+        await context.Database.ExecuteSqlRawAsync(history.GetCreateScript(), cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(
+            history.GetInsertScript(new HistoryRow(firstMigrationId, version)),
+            cancellationToken);
     }
 
     /// <summary>
