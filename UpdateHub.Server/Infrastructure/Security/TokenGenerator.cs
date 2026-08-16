@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -8,72 +8,67 @@ using UpdateHub.Server.Domain.Entities;
 
 namespace UpdateHub.Server.Infrastructure.Security;
 
+/// <summary>
+/// Выпуск access-токенов и refresh-токенов.
+/// </summary>
+/// <param name="jwtSettings">Параметры выпуска токенов.</param>
 public class TokenGenerator(IOptions<JwtSettings> jwtSettings)
 {
-    private readonly JwtSettings _jwtSettings = jwtSettings.Value;
+    private readonly JwtSettings _settings = jwtSettings.Value;
 
+    /// <summary>Срок жизни access-токена.</summary>
+    public TimeSpan AccessTokenLifetime => TimeSpan.FromMinutes(_settings.AccessTokenExpiryMinutes);
+
+    /// <summary>Срок жизни refresh-токена.</summary>
+    public TimeSpan RefreshTokenLifetime => TimeSpan.FromDays(_settings.RefreshTokenExpiryDays);
+
+    /// <summary>
+    /// Выпускает подписанный access-токен для пользователя.
+    /// </summary>
+    /// <param name="user">Пользователь, которому выдаётся токен.</param>
+    /// <returns>Строковое представление JWT.</returns>
     public string GenerateAccessToken(UserEntity user)
     {
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-            new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
-            new Claim(ClaimTypes.Role, user.Role.ToString()),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim(JwtRegisteredClaimNames.Iat,
-                new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds().ToString(),
-                ClaimValueTypes.Integer64)
+            new(ClaimTypes.NameIdentifier, user.Id),
+            new(ClaimTypes.Name, user.Username),
+            new(ClaimTypes.Role, user.Role.ToString()),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.SecretKey));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SecretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
-            issuer: _jwtSettings.Issuer,
-            audience: _jwtSettings.Audience,
+            issuer: _settings.Issuer,
+            audience: _settings.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpiryMinutes),
-            signingCredentials: credentials
-        );
+            notBefore: DateTime.UtcNow,
+            expires: DateTime.UtcNow.Add(AccessTokenLifetime),
+            signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    /// <summary>
+    /// Генерирует случайный refresh-токен.
+    /// </summary>
+    /// <returns>Токен в кодировке Base64 без символов, требующих экранирования в URL.</returns>
     public string GenerateRefreshToken()
     {
-        var randomNumber = new byte[64];
-        using var rng = RandomNumberGenerator.Create();
-        rng.GetBytes(randomNumber);
-        return Convert.ToBase64String(randomNumber);
+        var bytes = RandomNumberGenerator.GetBytes(48);
+        return Convert.ToBase64String(bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=');
     }
 
-    public (bool IsValid, ClaimsPrincipal? Principal) ValidateAccessToken(string token)
-    {
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.UTF8.GetBytes(_jwtSettings.SecretKey);
-
-        try
-        {
-            var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(key),
-                ValidateIssuer = true,
-                ValidIssuer = _jwtSettings.Issuer,
-                ValidateAudience = true,
-                ValidAudience = _jwtSettings.Audience,
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.Zero
-            }, out _);
-
-            return (true, principal);
-        }
-        catch
-        {
-            return (false, null);
-        }
-    }
-
+    /// <summary>
+    /// Вычисляет хэш refresh-токена для хранения в базе.
+    /// </summary>
+    /// <param name="refreshToken">Значение токена.</param>
+    /// <returns>SHA-256 в кодировке Base64.</returns>
+    /// <remarks>
+    /// В базе хранится только хэш, поэтому её утечка не позволяет обновить access-токен.
+    /// </remarks>
     public string HashRefreshToken(string refreshToken)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken));

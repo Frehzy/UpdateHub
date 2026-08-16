@@ -1,9 +1,20 @@
-﻿using UpdateHub.Server.Domain.Entities;
+using UpdateHub.Server.Domain.Entities;
 
 namespace UpdateHub.Server.Application.Abstractions.Repositories;
 
-public interface IClientHistoryRepository : IRepository<ClientHistoryEntity>
+/// <summary>Доступ к истории изменений характеристик компьютеров.</summary>
+public interface IClientHistoryRepository : IRepository<ClientHistoryEntity, int>
 {
-    Task<IEnumerable<ClientHistoryEntity>> GetByClientIdAsync(string clientId, int limit = 50);
-    Task<IEnumerable<ClientHistoryEntity>> GetOlderThanAsync(DateTime cutoff);
+    /// <summary>Возвращает последние записи истории компьютера.</summary>
+    /// <param name="clientId">Идентификатор компьютера.</param>
+    /// <param name="limit">Максимальное число записей.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список записей от новых к старым.</returns>
+    Task<IReadOnlyList<ClientHistoryEntity>> GetByClientIdAsync(string clientId, int limit = 50, CancellationToken cancellationToken = default);
+
+    /// <summary>Удаляет записи старше указанного момента.</summary>
+    /// <param name="cutoff">Граничный момент времени.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Число удалённых записей.</returns>
+    Task<int> DeleteOlderThanAsync(DateTime cutoff, CancellationToken cancellationToken = default);
 }

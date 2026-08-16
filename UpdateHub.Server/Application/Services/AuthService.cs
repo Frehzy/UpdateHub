@@ -1,244 +1,258 @@
-﻿using AutoMapper;
-using UpdateHub.Server.Api.V1.DTOs.Request;
-using UpdateHub.Server.Api.V1.DTOs.Response;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Application.Abstractions.Services;
+using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Domain.Enums;
 using UpdateHub.Server.Infrastructure.Security;
 
 namespace UpdateHub.Server.Application.Services;
 
+/// <summary>Вход в систему, обновление и отзыв токенов, управление паролями.</summary>
+/// <param name="userRepository">Доступ к учётным записям.</param>
+/// <param name="refreshTokenRepository">Доступ к refresh-токенам.</param>
+/// <param name="userClientAccessRepository">Доступ к персональным разрешениям.</param>
+/// <param name="userGroupAccessRepository">Доступ к разрешениям на группы.</param>
+/// <param name="clientAccessService">Проверка прав на компьютер.</param>
+/// <param name="clientService">Управление компьютерами.</param>
+/// <param name="tokenGenerator">Выпуск токенов.</param>
+/// <param name="passwordHasher">Хэширование паролей.</param>
+/// <param name="logger">Журнал.</param>
 public class AuthService(
     IUserRepository userRepository,
     IRefreshTokenRepository refreshTokenRepository,
     IUserClientAccessRepository userClientAccessRepository,
     IUserGroupAccessRepository userGroupAccessRepository,
+    IClientAccessService clientAccessService,
     IClientService clientService,
     TokenGenerator tokenGenerator,
     PasswordHasher passwordHasher,
-    IMapper mapper,
     ILogger<AuthService> logger) : IAuthService
 {
-    public async Task<AuthResponseDto> LoginAsync(AuthRequestDto request, string? userAgent)
+    /// <summary>Минимальная длина пароля.</summary>
+    private const int MinPasswordLength = 8;
+
+    /// <inheritdoc />
+    public async Task<AuthResult> LoginAsync(
+        string username,
+        string password,
+        string clientId,
+        ConnectionContext context,
+        CancellationToken cancellationToken = default)
     {
-        var user = await userRepository.GetByUsernameAsync(request.Username);
-        if (user == null || !passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+        var user = await userRepository.GetByUsernameAsync(username, cancellationToken);
+
+        // Пароль проверяется даже при отсутствии пользователя, чтобы время ответа
+        // не позволяло отличить неизвестный логин от неверного пароля.
+        var passwordValid = user is not null && passwordHasher.VerifyPassword(password, user.PasswordHash);
+
+        if (user is null || !passwordValid)
         {
-            throw new UnauthorizedAccessException("Invalid username or password");
+            logger.LogWarning("Неудачный вход под логином {Username} с адреса {Ip}", username, context.RemoteIpAddress);
+            throw new AuthenticationFailedException("Неверный логин или пароль");
         }
 
         if (!user.IsActive)
         {
-            throw new UnauthorizedAccessException("User account is disabled");
+            throw new AuthenticationFailedException("Учётная запись отключена");
         }
 
-        // Проверяем, есть ли у пользователя доступ к чему-либо
-        var hasAccess = await HasAccessToAnyClientAsync(user.Id);
-        if (!hasAccess)
+        var isAdmin = user.Role == UserRole.Admin;
+
+        // Проверка компьютера идёт до любых изменений в базе: неизвестный
+        // идентификатор не должен приводить к появлению новой записи о клиенте.
+        var access = await clientAccessService.AuthorizeAsync(user.Id, isAdmin, clientId, cancellationToken);
+        if (!access.IsAllowed)
         {
-            throw new UnauthorizedAccessException("User has no access to any clients or groups");
+            throw new AuthenticationFailedException(access.Reason ?? "Доступ к компьютеру запрещён");
         }
 
-        // Обновляем информацию о клиенте
-        var client = await clientService.GetOrCreateClientAsync(request.ClientInfo!);
-
-        // Проверяем доступ к этому клиенту
-        if (!await HasAccessToClientAsync(user.Id, client.Id))
-        {
-            throw new UnauthorizedAccessException("Access denied to this client");
-        }
-
-        // Обновляем время последнего входа
         user.LastLogin = DateTime.UtcNow;
-        await userRepository.UpdateAsync(user);
+        await userRepository.UpdateAsync(user, cancellationToken);
 
-        // Генерируем токены
-        var accessToken = tokenGenerator.GenerateAccessToken(user);
-        var refreshToken = tokenGenerator.GenerateRefreshToken();
-
-        // Сохраняем refresh token
-        var refreshTokenEntity = await refreshTokenRepository.CreateAsync(new RefreshTokenEntity
-        {
-            UserId = user.Id,
-            Token = tokenGenerator.HashRefreshToken(refreshToken),
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
-            ClientIp = request.ClientInfo?.IpAddress,
-            UserAgent = userAgent
-        });
-
-        // Создаём сессию
-        await clientService.AddClientHistoryAsync(
-            client.Id,
-            ClientChangeType.SessionCreated.ToString(),
+        await clientService.AddHistoryAsync(
+            clientId,
+            ClientChangeType.LoggedIn,
             null,
-            $"Login from {request.ClientInfo?.IpAddress}",
-            null);
+            $"{user.Username} с адреса {context.RemoteIpAddress ?? "неизвестно"}",
+            cancellationToken);
 
-        return new AuthResponseDto
-        {
-            AccessToken = accessToken,
-            RefreshToken = refreshToken,
-            TokenType = "Bearer",
-            ExpiresIn = 86400,
-            UserId = user.Id,
-            Username = user.Username,
-            Role = user.Role.ToString(),
-            ClientId = client.Id,
-            MustChangePassword = user.MustChangePassword
-        };
+        var result = await IssueTokensAsync(user, clientId, context, cancellationToken);
+
+        logger.LogInformation("Пользователь {Username} вошёл на компьютере {ClientId}", user.Username, clientId);
+        return result;
     }
 
-    public async Task<RefreshResponseDto> RefreshTokenAsync(string refreshToken)
+    /// <inheritdoc />
+    public async Task<AuthResult> RefreshAsync(
+        string refreshToken,
+        ConnectionContext context,
+        CancellationToken cancellationToken = default)
     {
-        var hashedToken = tokenGenerator.HashRefreshToken(refreshToken);
-        var tokenEntity = await refreshTokenRepository.GetByTokenAsync(hashedToken);
+        var hash = tokenGenerator.HashRefreshToken(refreshToken);
+        var stored = await refreshTokenRepository.GetByHashAsync(hash, cancellationToken);
 
-        if (tokenEntity == null || tokenEntity.ExpiresAt < DateTime.UtcNow || tokenEntity.RevokedAt != null)
+        if (stored is null || stored.RevokedAt is not null || stored.ExpiresAt < DateTime.UtcNow)
         {
-            throw new UnauthorizedAccessException("Invalid or expired refresh token");
+            throw new AuthenticationFailedException("Refresh-токен недействителен или истёк");
         }
 
-        var user = await userRepository.GetByIdAsync(tokenEntity.UserId);
-        if (user == null || !user.IsActive)
+        var user = await userRepository.GetByIdAsync(stored.UserId, cancellationToken);
+        if (user is null || !user.IsActive)
         {
-            throw new UnauthorizedAccessException("User not found or disabled");
+            throw new AuthenticationFailedException("Учётная запись не найдена или отключена");
         }
 
-        var accessToken = tokenGenerator.GenerateAccessToken(user);
+        // Ротация: старый токен отзывается сразу, чтобы перехваченным значением
+        // нельзя было воспользоваться после законного владельца.
+        stored.RevokedAt = DateTime.UtcNow;
+        await refreshTokenRepository.UpdateAsync(stored, cancellationToken);
 
-        return new RefreshResponseDto
-        {
-            AccessToken = accessToken,
-            ExpiresIn = 86400
-        };
+        return await IssueTokensAsync(user, null, context, cancellationToken);
     }
 
-    public async Task LogoutAsync(string refreshToken, string userId)
+    /// <inheritdoc />
+    public async Task LogoutAsync(string refreshToken, string userId, CancellationToken cancellationToken = default)
     {
-        var hashedToken = tokenGenerator.HashRefreshToken(refreshToken);
-        var tokenEntity = await refreshTokenRepository.GetByTokenAsync(hashedToken);
+        var hash = tokenGenerator.HashRefreshToken(refreshToken);
+        var stored = await refreshTokenRepository.GetByHashAsync(hash, cancellationToken);
 
-        if (tokenEntity != null && tokenEntity.UserId == userId)
+        if (stored is null || stored.UserId != userId || stored.RevokedAt is not null)
         {
-            tokenEntity.RevokedAt = DateTime.UtcNow;
-            await refreshTokenRepository.UpdateAsync(tokenEntity);
+            return;
         }
+
+        stored.RevokedAt = DateTime.UtcNow;
+        await refreshTokenRepository.UpdateAsync(stored, cancellationToken);
     }
 
-    public async Task ChangePasswordAsync(string userId, string currentPassword, string newPassword)
+    /// <inheritdoc />
+    public async Task ChangePasswordAsync(
+        string userId,
+        string currentPassword,
+        string newPassword,
+        CancellationToken cancellationToken = default)
     {
-        var user = await userRepository.GetByIdAsync(userId) ?? throw new ArgumentException("User not found");
+        var user = await userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new AuthenticationFailedException("Пользователь не найден");
+
         if (!passwordHasher.VerifyPassword(currentPassword, user.PasswordHash))
         {
-            throw new UnauthorizedAccessException("Current password is incorrect");
+            throw new AuthenticationFailedException("Текущий пароль указан неверно");
+        }
+
+        ValidatePassword(newPassword);
+
+        if (passwordHasher.VerifyPassword(newPassword, user.PasswordHash))
+        {
+            throw new ArgumentException("Новый пароль должен отличаться от текущего");
         }
 
         user.PasswordHash = passwordHasher.HashPassword(newPassword);
         user.MustChangePassword = false;
-        await userRepository.UpdateAsync(user);
+        await userRepository.UpdateAsync(user, cancellationToken);
+
+        // Смена пароля обесценивает все ранее выданные refresh-токены.
+        var revoked = await refreshTokenRepository.RevokeAllForUserAsync(userId, cancellationToken);
+        logger.LogInformation("Пользователь {Username} сменил пароль, отозвано токенов: {Count}", user.Username, revoked);
     }
 
-    public async Task<UserEntity> CreateUserAsync(string username, string password, string role, List<string>? groupIds, List<string>? clientIds)
+    /// <inheritdoc />
+    public async Task<UserEntity> CreateUserAsync(
+        string username,
+        string password,
+        UserRole role,
+        IReadOnlyCollection<string>? groupIds,
+        IReadOnlyCollection<string>? clientIds,
+        CancellationToken cancellationToken = default)
     {
-        if (await userRepository.GetByUsernameAsync(username) != null)
+        if (string.IsNullOrWhiteSpace(username))
         {
-            throw new InvalidOperationException("Username already exists");
+            throw new ArgumentException("Логин не может быть пустым");
+        }
+
+        ValidatePassword(password);
+
+        if (await userRepository.GetByUsernameAsync(username, cancellationToken) is not null)
+        {
+            throw new InvalidOperationException($"Логин '{username}' уже занят");
         }
 
         var user = new UserEntity
         {
             Username = username,
             PasswordHash = passwordHasher.HashPassword(password),
-            Role = Enum.Parse<UserRole>(role, true),
+            Role = role,
             IsActive = true,
-            MustChangePassword = false
+            MustChangePassword = true
         };
 
-        user = await userRepository.CreateAsync(user);
+        await userRepository.CreateAsync(user, cancellationToken);
 
-        // Добавляем доступ к группам
-        if (groupIds != null)
+        foreach (var groupId in groupIds ?? [])
         {
-            foreach (var groupId in groupIds)
-            {
-                await userGroupAccessRepository.CreateAsync(new UserGroupAccessEntity
-                {
-                    UserId = user.Id,
-                    GroupId = groupId,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
+            await userGroupAccessRepository.CreateAsync(
+                new UserGroupAccessEntity { UserId = user.Id, GroupId = groupId },
+                cancellationToken);
         }
 
-        // Добавляем доступ к конкретным клиентам
-        if (clientIds != null)
+        foreach (var clientId in clientIds ?? [])
         {
-            foreach (var clientId in clientIds)
-            {
-                await userClientAccessRepository.CreateAsync(new UserClientAccessEntity
-                {
-                    UserId = user.Id,
-                    ClientId = clientId,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
+            await userClientAccessRepository.CreateAsync(
+                new UserClientAccessEntity { UserId = user.Id, ClientId = clientId },
+                cancellationToken);
         }
 
+        logger.LogInformation("Создан пользователь {Username} с ролью {Role}", user.Username, role);
         return user;
     }
 
-    public async Task<bool> HasAccessToClientAsync(string userId, string clientId)
+    /// <summary>
+    /// Выпускает пару токенов и сохраняет хэш refresh-токена.
+    /// </summary>
+    /// <param name="user">Пользователь.</param>
+    /// <param name="clientId">Компьютер, если вход выполнен с него.</param>
+    /// <param name="context">Сведения о соединении.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Выданные токены.</returns>
+    private async Task<AuthResult> IssueTokensAsync(
+        UserEntity user,
+        string? clientId,
+        ConnectionContext context,
+        CancellationToken cancellationToken)
     {
-        // Проверяем прямой доступ к клиенту
-        var access = await userClientAccessRepository.GetByUserAndClientAsync(userId, clientId);
-        if (access != null)
-        {
-            return true;
-        }
+        var accessToken = tokenGenerator.GenerateAccessToken(user);
+        var refreshToken = tokenGenerator.GenerateRefreshToken();
 
-        // Проверяем доступ через группы
-        var client = await clientService.GetClientByIdAsync(clientId);
-        if (client?.GroupId != null)
+        await refreshTokenRepository.CreateAsync(new RefreshTokenEntity
         {
-            var groupAccess = await userGroupAccessRepository.GetByUserAndGroupAsync(userId, client.GroupId);
-            if (groupAccess != null)
-            {
-                return true;
-            }
-        }
+            UserId = user.Id,
+            Token = tokenGenerator.HashRefreshToken(refreshToken),
+            ExpiresAt = DateTime.UtcNow.Add(tokenGenerator.RefreshTokenLifetime),
+            ClientIp = context.RemoteIpAddress,
+            UserAgent = context.UserAgent
+        }, cancellationToken);
 
-        return false;
+        return new AuthResult(
+            accessToken,
+            refreshToken,
+            (int)tokenGenerator.AccessTokenLifetime.TotalSeconds,
+            user.Id,
+            user.Username,
+            user.Role.ToString(),
+            clientId,
+            user.MustChangePassword);
     }
 
-    public async Task<bool> HasAccessToAnyClientAsync(string userId)
+    /// <summary>
+    /// Проверяет пароль на соответствие минимальным требованиям.
+    /// </summary>
+    /// <param name="password">Проверяемый пароль.</param>
+    /// <exception cref="ArgumentException">Пароль слишком короткий или пустой.</exception>
+    private static void ValidatePassword(string password)
     {
-        // Проверяем прямой доступ к клиентам
-        var clientAccesses = await userClientAccessRepository.GetByUserIdAsync(userId);
-        if (clientAccesses.Any())
+        if (string.IsNullOrWhiteSpace(password) || password.Length < MinPasswordLength)
         {
-            return true;
+            throw new ArgumentException($"Пароль должен содержать не менее {MinPasswordLength} символов");
         }
-
-        // Проверяем доступ через группы
-        var groupAccesses = await userGroupAccessRepository.GetByUserIdAsync(userId);
-        if (groupAccesses.Any())
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    public async Task<IEnumerable<string>> GetUserClientIdsAsync(string userId)
-    {
-        var clientAccesses = await userClientAccessRepository.GetByUserIdAsync(userId);
-        return clientAccesses.Select(a => a.ClientId);
-    }
-
-    public async Task<IEnumerable<string>> GetUserGroupIdsAsync(string userId)
-    {
-        var groupAccesses = await userGroupAccessRepository.GetByUserIdAsync(userId);
-        return groupAccesses.Select(a => a.GroupId);
     }
 }

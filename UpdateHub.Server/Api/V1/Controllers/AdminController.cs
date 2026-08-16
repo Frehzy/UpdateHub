@@ -1,341 +1,501 @@
-﻿using AutoMapper;
+using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UpdateHub.Server.Api.V1.DTOs.Request;
 using UpdateHub.Server.Api.V1.DTOs.Response;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Application.Abstractions.Services;
+using UpdateHub.Server.Application.Manifest;
+using UpdateHub.Server.Application.Sync;
+using UpdateHub.Server.Domain.Enums;
 
 namespace UpdateHub.Server.Api.V1.Controllers;
 
+/// <summary>
+/// Панель управления: пользователи, компьютеры, группы, права и манифест.
+/// </summary>
+/// <param name="clientService">Управление компьютерами.</param>
+/// <param name="groupService">Управление группами и правами.</param>
+/// <param name="authService">Создание учётных записей.</param>
+/// <param name="statisticsService">Сводная статистика.</param>
+/// <param name="enrollmentService">Рассмотрение заявок.</param>
+/// <param name="manifestScanService">Пересборка манифеста.</param>
+/// <param name="manifestState">Состояние манифеста.</param>
+/// <param name="userRepository">Доступ к учётным записям.</param>
+/// <param name="refreshTokenRepository">Доступ к refresh-токенам.</param>
+/// <param name="enrollmentRepository">Доступ к заявкам.</param>
+/// <param name="computerInfoRepository">Доступ к сведениям о железе.</param>
+/// <param name="mapper">Преобразование сущностей в модели ответа.</param>
+/// <remarks>
+/// Весь контроллер закрыт ролью администратора. Прежняя версия не проверяла
+/// роль нигде: любой действующий токен, включая выданный обычному пользователю,
+/// открывал все эти операции целиком.
+/// </remarks>
 [ApiController]
 [Route("api/v1/admin")]
+[Authorize(Roles = nameof(UserRole.Admin))]
+[Produces("application/json")]
 public class AdminController(
     IClientService clientService,
-    IManifestService manifestService,
-    IStatisticsService statisticsService,
     IGroupService groupService,
+    IAuthService authService,
+    IStatisticsService statisticsService,
+    IEnrollmentService enrollmentService,
+    IManifestScanService manifestScanService,
+    ManifestState manifestState,
     IUserRepository userRepository,
-    IMapper mapper,
-    ILogger<AdminController> logger) : ControllerBase
+    IRefreshTokenRepository refreshTokenRepository,
+    IEnrollmentRequestRepository enrollmentRepository,
+    IClientComputerInfoRepository computerInfoRepository,
+    IMapper mapper) : ApiControllerBase
 {
+    // ---------- Пользователи ----------
+
+    /// <summary>Возвращает список учётных записей.</summary>
+    /// <param name="role">Ограничение по роли.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список пользователей.</returns>
+    /// <response code="200">Список получен.</response>
     [HttpGet("users")]
-    public async Task<IActionResult> GetUsers([FromQuery] string? role = null)
+    public async Task<IActionResult> GetUsers([FromQuery] UserRole? role, CancellationToken cancellationToken)
     {
-        var users = await userRepository.GetAllAsync();
+        var users = role.HasValue
+            ? await userRepository.GetByRoleAsync(role.Value, cancellationToken)
+            : await userRepository.GetAllAsync(cancellationToken);
 
-        if (!string.IsNullOrEmpty(role))
-        {
-            users = users.Where(u => u.Role.ToString() == role);
-        }
-
-        var response = mapper.Map<IEnumerable<UserResponseDto>>(users);
-        return Ok(new { users = response, total = response.Count() });
+        var response = mapper.Map<List<UserResponseDto>>(users);
+        return Ok(new { users = response, total = response.Count });
     }
 
+    /// <summary>Возвращает учётную запись вместе с выданными ей правами.</summary>
+    /// <param name="userId">Идентификатор пользователя.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Сведения о пользователе.</returns>
+    /// <response code="200">Пользователь найден.</response>
+    /// <response code="404">Пользователь не найден.</response>
     [HttpGet("users/{userId}")]
-    public async Task<IActionResult> GetUser(string userId)
+    public async Task<IActionResult> GetUser(string userId, CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetByIdAsync(userId);
-        if (user == null)
-        {
-            return NotFound(new ErrorResponseDto { Error = "User not found" });
-        }
+        var user = await userRepository.GetByIdWithAccessAsync(userId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Пользователь '{userId}' не найден");
 
-        var response = mapper.Map<UserResponseDto>(user);
-        return Ok(response);
+        return Ok(mapper.Map<UserResponseDto>(user));
     }
 
-    [HttpPut("users/{userId}/status")]
-    public async Task<IActionResult> ToggleUserStatus(string userId, [FromBody] ToggleUserStatusRequestDto request)
+    /// <summary>Создаёт учётную запись.</summary>
+    /// <param name="request">Параметры создания.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Созданный пользователь.</returns>
+    /// <response code="201">Пользователь создан.</response>
+    /// <response code="400">Пароль не удовлетворяет требованиям.</response>
+    /// <response code="409">Логин уже занят.</response>
+    [HttpPost("users")]
+    public async Task<IActionResult> CreateUser(
+        [FromBody] CreateUserRequestDto request,
+        CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetByIdAsync(userId);
-        if (user == null)
-        {
-            return NotFound(new ErrorResponseDto { Error = "User not found" });
-        }
+        var user = await authService.CreateUserAsync(
+            request.Username,
+            request.Password,
+            request.Role,
+            request.GroupIds,
+            request.ClientIds,
+            cancellationToken);
+
+        return CreatedAtAction(nameof(GetUser), new { userId = user.Id }, mapper.Map<UserResponseDto>(user));
+    }
+
+    /// <summary>Включает или отключает учётную запись.</summary>
+    /// <param name="userId">Идентификатор пользователя.</param>
+    /// <param name="request">Новое состояние.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Обновлённое состояние.</returns>
+    /// <response code="200">Состояние изменено.</response>
+    /// <response code="404">Пользователь не найден.</response>
+    [HttpPut("users/{userId}/status")]
+    public async Task<IActionResult> ToggleUserStatus(
+        string userId,
+        [FromBody] ToggleUserStatusRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var user = await userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Пользователь '{userId}' не найден");
 
         user.IsActive = request.IsActive;
-        await userRepository.UpdateAsync(user);
+        await userRepository.UpdateAsync(user, cancellationToken);
+
+        // Отключённая запись не должна продолжать работать по ранее выданным токенам.
+        if (!request.IsActive)
+        {
+            await refreshTokenRepository.RevokeAllForUserAsync(userId, cancellationToken);
+        }
 
         return Ok(new { user.Id, user.IsActive });
     }
 
+    /// <summary>Отключает учётную запись без удаления её истории.</summary>
+    /// <param name="userId">Идентификатор пользователя.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Пустой ответ.</returns>
+    /// <response code="204">Запись отключена.</response>
+    /// <response code="404">Пользователь не найден.</response>
     [HttpDelete("users/{userId}")]
-    public async Task<IActionResult> DeleteUser(string userId)
+    public async Task<IActionResult> DeleteUser(string userId, CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetByIdAsync(userId);
-        if (user == null)
-        {
-            return NotFound(new ErrorResponseDto { Error = "User not found" });
-        }
+        var user = await userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Пользователь '{userId}' не найден");
 
-        // Мягкое удаление
         user.IsActive = false;
-        await userRepository.UpdateAsync(user);
+        await userRepository.UpdateAsync(user, cancellationToken);
+        await refreshTokenRepository.RevokeAllForUserAsync(userId, cancellationToken);
 
         return NoContent();
     }
 
-    [HttpPost("refresh")]
-    public async Task<IActionResult> RefreshManifest()
+    // ---------- Права ----------
+
+    /// <summary>Выдаёт пользователю права на компьютер.</summary>
+    /// <param name="userId">Идентификатор пользователя.</param>
+    /// <param name="clientId">Идентификатор компьютера.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Подтверждение.</returns>
+    /// <response code="200">Права выданы.</response>
+    /// <response code="404">Пользователь или компьютер не найдены.</response>
+    [HttpPut("users/{userId}/clients/{clientId}")]
+    public async Task<IActionResult> GrantClientAccess(string userId, string clientId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await manifestService.RefreshManifestAsync();
-            return Ok(new { status = "ok", message = "Manifest refreshed successfully" });
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error refreshing manifest");
-            return StatusCode(500, new ErrorResponseDto { Error = "Failed to refresh manifest" });
-        }
+        await groupService.GrantClientAccessAsync(userId, clientId, cancellationToken);
+        return Ok(new { status = "ok" });
     }
 
-    [HttpGet("stats")]
-    public async Task<IActionResult> GetStats([FromQuery] int? days)
+    /// <summary>Отзывает права пользователя на компьютер.</summary>
+    /// <param name="userId">Идентификатор пользователя.</param>
+    /// <param name="clientId">Идентификатор компьютера.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Пустой ответ.</returns>
+    /// <response code="204">Права отозваны.</response>
+    /// <response code="404">Разрешение не найдено.</response>
+    [HttpDelete("users/{userId}/clients/{clientId}")]
+    public async Task<IActionResult> RevokeClientAccess(string userId, string clientId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var stats = await statisticsService.GetStatisticsAsync(days);
-            return Ok(stats);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error getting statistics");
-            return StatusCode(500, new ErrorResponseDto { Error = "Failed to get statistics" });
-        }
+        await groupService.RevokeClientAccessAsync(userId, clientId, cancellationToken);
+        return NoContent();
     }
 
-    [HttpPost("clients")]
-    public async Task<IActionResult> CreateClient([FromBody] CreateClientRequestDto request)
+    /// <summary>Выдаёт пользователю права на группу компьютеров.</summary>
+    /// <param name="userId">Идентификатор пользователя.</param>
+    /// <param name="groupId">Идентификатор группы.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Подтверждение.</returns>
+    /// <response code="200">Права выданы.</response>
+    /// <response code="404">Пользователь или группа не найдены.</response>
+    [HttpPut("users/{userId}/groups/{groupId}")]
+    public async Task<IActionResult> GrantGroupAccess(string userId, string groupId, CancellationToken cancellationToken)
     {
-        try
-        {
-            var client = await clientService.CreateClientAsync(request);
-            return CreatedAtAction(nameof(GetClient), new { id = client.Id }, new
-            {
-                client.Id,
-                client.GroupId,
-                client.CreatedAt,
-                client.IsActive
-            });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new ErrorResponseDto { Error = ex.Message });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new ErrorResponseDto { Error = ex.Message });
-        }
+        await groupService.GrantGroupAccessAsync(userId, groupId, cancellationToken);
+        return Ok(new { status = "ok" });
     }
 
+    /// <summary>Отзывает права пользователя на группу.</summary>
+    /// <param name="userId">Идентификатор пользователя.</param>
+    /// <param name="groupId">Идентификатор группы.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Пустой ответ.</returns>
+    /// <response code="204">Права отозваны.</response>
+    /// <response code="404">Разрешение не найдено.</response>
+    [HttpDelete("users/{userId}/groups/{groupId}")]
+    public async Task<IActionResult> RevokeGroupAccess(string userId, string groupId, CancellationToken cancellationToken)
+    {
+        await groupService.RevokeGroupAccessAsync(userId, groupId, cancellationToken);
+        return NoContent();
+    }
+
+    // ---------- Компьютеры ----------
+
+    /// <summary>Возвращает список компьютеров.</summary>
+    /// <param name="groupId">Ограничение по группе.</param>
+    /// <param name="isBlocked">Ограничение по признаку блокировки.</param>
+    /// <param name="search">Строка поиска по идентификатору и имени.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список компьютеров.</returns>
+    /// <response code="200">Список получен.</response>
     [HttpGet("clients")]
-    public async Task<IActionResult> GetClients([FromQuery] string? groupId, [FromQuery] bool? isBlocked, [FromQuery] string? search)
+    public async Task<IActionResult> GetClients(
+        [FromQuery] string? groupId,
+        [FromQuery] bool? isBlocked,
+        [FromQuery] string? search,
+        CancellationToken cancellationToken)
     {
-        var clients = await clientService.GetAllClientsAsync(groupId, isBlocked, search);
-        var response = clients.Select(c => new
+        var clients = await clientService.GetAllAsync(groupId, isBlocked, search, cancellationToken);
+        var response = mapper.Map<List<ClientResponseDto>>(clients);
+        return Ok(new { clients = response, total = response.Count });
+    }
+
+    /// <summary>Возвращает подробные сведения о компьютере.</summary>
+    /// <param name="clientId">Идентификатор компьютера.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Сведения о компьютере.</returns>
+    /// <response code="200">Компьютер найден.</response>
+    /// <response code="404">Компьютер не найден.</response>
+    [HttpGet("clients/{clientId}")]
+    public async Task<IActionResult> GetClient(string clientId, CancellationToken cancellationToken)
+        => Ok(await clientService.GetDetailAsync(clientId, cancellationToken));
+
+    /// <summary>Регистрирует компьютер вручную.</summary>
+    /// <param name="request">Параметры регистрации.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Созданный компьютер.</returns>
+    /// <response code="201">Компьютер зарегистрирован.</response>
+    /// <response code="409">Компьютер с таким идентификатором уже есть.</response>
+    [HttpPost("clients")]
+    public async Task<IActionResult> CreateClient(
+        [FromBody] CreateClientRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var client = await clientService.CreateAsync(request, cancellationToken);
+        return CreatedAtAction(nameof(GetClient), new { clientId = client.Id }, new { client.Id, client.GroupId });
+    }
+
+    /// <summary>Изменяет имя и группу компьютера.</summary>
+    /// <param name="clientId">Идентификатор компьютера.</param>
+    /// <param name="request">Новые значения.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Обновлённые сведения.</returns>
+    /// <response code="200">Изменения сохранены.</response>
+    /// <response code="404">Компьютер или группа не найдены.</response>
+    [HttpPut("clients/{clientId}")]
+    public async Task<IActionResult> UpdateClient(
+        string clientId,
+        [FromBody] UpdateClientRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var client = await clientService.UpdateAsync(clientId, request, cancellationToken);
+        return Ok(new { client.Id, client.GroupId, client.IsBlocked, client.IsActive });
+    }
+
+    /// <summary>Помечает компьютер удалённым.</summary>
+    /// <param name="clientId">Идентификатор компьютера.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Пустой ответ.</returns>
+    /// <response code="204">Компьютер помечен удалённым.</response>
+    /// <response code="404">Компьютер не найден.</response>
+    [HttpDelete("clients/{clientId}")]
+    public async Task<IActionResult> DeleteClient(string clientId, CancellationToken cancellationToken)
+    {
+        await clientService.DeleteAsync(clientId, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Блокирует компьютер.</summary>
+    /// <param name="clientId">Идентификатор компьютера.</param>
+    /// <param name="request">Причина блокировки.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Подтверждение.</returns>
+    /// <response code="200">Компьютер заблокирован.</response>
+    /// <response code="404">Компьютер не найден.</response>
+    [HttpPost("clients/{clientId}/block")]
+    public async Task<IActionResult> BlockClient(
+        string clientId,
+        [FromBody] BlockClientRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        await clientService.BlockAsync(clientId, request.Reason, CurrentUsername, cancellationToken);
+        return Ok(new { status = "ok" });
+    }
+
+    /// <summary>Снимает блокировку с компьютера.</summary>
+    /// <param name="clientId">Идентификатор компьютера.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Подтверждение.</returns>
+    /// <response code="200">Блокировка снята.</response>
+    /// <response code="404">Компьютер не найден.</response>
+    [HttpPost("clients/{clientId}/unblock")]
+    public async Task<IActionResult> UnblockClient(string clientId, CancellationToken cancellationToken)
+    {
+        await clientService.UnblockAsync(clientId, CurrentUsername, cancellationToken);
+        return Ok(new { status = "ok" });
+    }
+
+    // ---------- Группы ----------
+
+    /// <summary>Возвращает список активных групп.</summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список групп.</returns>
+    /// <response code="200">Список получен.</response>
+    [HttpGet("groups")]
+    public async Task<IActionResult> GetGroups(CancellationToken cancellationToken)
+    {
+        var groups = await groupService.GetAllAsync(cancellationToken);
+        return Ok(new { groups, total = groups.Count });
+    }
+
+    /// <summary>Возвращает группу вместе с её составом.</summary>
+    /// <param name="groupId">Идентификатор группы.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Сведения о группе.</returns>
+    /// <response code="200">Группа найдена.</response>
+    /// <response code="404">Группа не найдена.</response>
+    [HttpGet("groups/{groupId}")]
+    public async Task<IActionResult> GetGroup(string groupId, CancellationToken cancellationToken)
+        => Ok(await groupService.GetDetailAsync(groupId, cancellationToken));
+
+    /// <summary>Создаёт группу компьютеров.</summary>
+    /// <param name="request">Параметры создания.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Созданная группа.</returns>
+    /// <response code="201">Группа создана.</response>
+    /// <response code="409">Группа с таким названием уже есть.</response>
+    [HttpPost("groups")]
+    public async Task<IActionResult> CreateGroup(
+        [FromBody] CreateGroupRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var group = await groupService.CreateAsync(request.Name, request.Description, cancellationToken);
+        return CreatedAtAction(nameof(GetGroup), new { groupId = group.Id }, new { group.Id, group.Name });
+    }
+
+    /// <summary>Изменяет группу.</summary>
+    /// <param name="groupId">Идентификатор группы.</param>
+    /// <param name="request">Новые значения.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Обновлённая группа.</returns>
+    /// <response code="200">Изменения сохранены.</response>
+    /// <response code="404">Группа не найдена.</response>
+    [HttpPut("groups/{groupId}")]
+    public async Task<IActionResult> UpdateGroup(
+        string groupId,
+        [FromBody] UpdateGroupRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var group = await groupService.UpdateAsync(groupId, request.Name, request.Description, cancellationToken);
+        return Ok(new { group.Id, group.Name, group.Description });
+    }
+
+    /// <summary>Помечает группу удалённой.</summary>
+    /// <param name="groupId">Идентификатор группы.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Пустой ответ.</returns>
+    /// <response code="204">Группа помечена удалённой.</response>
+    /// <response code="404">Группа не найдена.</response>
+    [HttpDelete("groups/{groupId}")]
+    public async Task<IActionResult> DeleteGroup(string groupId, CancellationToken cancellationToken)
+    {
+        await groupService.DeleteAsync(groupId, cancellationToken);
+        return NoContent();
+    }
+
+    // ---------- Заявки на регистрацию ----------
+
+    /// <summary>Возвращает заявки на регистрацию компьютеров.</summary>
+    /// <param name="status">Ограничение по состоянию; по умолчанию — ожидающие рассмотрения.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список заявок.</returns>
+    /// <response code="200">Список получен.</response>
+    /// <remarks>
+    /// К каждой заявке прикладываются компьютеры с таким же отпечатком железа:
+    /// после переустановки системы идентификатор меняется, и эта подсказка
+    /// позволяет понять, что машина уже известна.
+    /// </remarks>
+    [HttpGet("enrollments")]
+    public async Task<IActionResult> GetEnrollments(
+        [FromQuery] EnrollmentStatus? status,
+        CancellationToken cancellationToken)
+    {
+        var requests = await enrollmentRepository.GetByStatusAsync(
+            status ?? EnrollmentStatus.Pending,
+            cancellationToken);
+
+        var response = mapper.Map<List<EnrollmentResponseDto>>(requests);
+
+        foreach (var item in response.Where(r => !string.IsNullOrEmpty(r.HardwareFingerprint)))
         {
-            c.Id,
-            c.GroupId,
-            c.ComputerInfo,
-            c.IsBlocked,
-            c.IsActive,
-            c.CreatedAt,
-            c.UpdatedAt
+            var matches = await computerInfoRepository.GetByFingerprintAsync(item.HardwareFingerprint!, cancellationToken);
+            item.MatchingClientIds = [.. matches.Select(m => m.ClientId).Where(id => id != item.ClientId)];
+        }
+
+        return Ok(new { enrollments = response, total = response.Count });
+    }
+
+    /// <summary>Одобряет заявку и заводит компьютер.</summary>
+    /// <param name="requestId">Идентификатор заявки.</param>
+    /// <param name="request">Группа, в которую поместить компьютер.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Созданный компьютер.</returns>
+    /// <response code="200">Заявка одобрена.</response>
+    /// <response code="404">Заявка или группа не найдены.</response>
+    /// <response code="409">Заявка уже рассмотрена.</response>
+    [HttpPost("enrollments/{requestId}/approve")]
+    public async Task<IActionResult> ApproveEnrollment(
+        string requestId,
+        [FromBody] ApproveEnrollmentRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var client = await enrollmentService.ApproveAsync(requestId, request.GroupId, CurrentUsername, cancellationToken);
+        return Ok(new { status = "ok", clientId = client.Id, client.GroupId });
+    }
+
+    /// <summary>Отклоняет заявку.</summary>
+    /// <param name="requestId">Идентификатор заявки.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Пустой ответ.</returns>
+    /// <response code="204">Заявка отклонена.</response>
+    /// <response code="404">Заявка не найдена.</response>
+    /// <response code="409">Заявка уже рассмотрена.</response>
+    [HttpPost("enrollments/{requestId}/reject")]
+    public async Task<IActionResult> RejectEnrollment(string requestId, CancellationToken cancellationToken)
+    {
+        await enrollmentService.RejectAsync(requestId, CurrentUsername, cancellationToken);
+        return NoContent();
+    }
+
+    // ---------- Манифест и статистика ----------
+
+    /// <summary>Возвращает состояние эталонного манифеста.</summary>
+    /// <returns>Состояние манифеста.</returns>
+    /// <response code="200">Состояние получено.</response>
+    [HttpGet("manifest/status")]
+    public IActionResult GetManifestStatus()
+        => Ok(new ManifestStatusResponseDto
+        {
+            Generation = manifestState.Generation,
+            IsScanning = manifestState.IsScanning,
+            LastScanCompletedAt = manifestState.LastScanCompletedAt,
+            EntryCount = manifestState.EntryCount,
+            TotalSizeBytes = manifestState.TotalSizeBytes,
+            RejectedPaths = manifestState.RejectedPaths
         });
 
-        return Ok(new { clients = response, total = response.Count() });
+    /// <summary>Запускает внеочередной обход каталога раздачи.</summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Итоги обхода.</returns>
+    /// <response code="200">Обход выполнен.</response>
+    /// <response code="409">Обход уже выполняется.</response>
+    [HttpPost("manifest/rescan")]
+    public async Task<IActionResult> RescanManifest(CancellationToken cancellationToken)
+    {
+        var result = await manifestScanService.ScanAsync(cancellationToken);
+
+        if (!result.Executed)
+        {
+            return Conflict(new ErrorResponseDto { Error = "Обход каталога уже выполняется" });
+        }
+
+        return Ok(new
+        {
+            status = "ok",
+            totalFiles = result.TotalFiles,
+            hashedFiles = result.HashedFiles,
+            changes = result.Changes,
+            rejectedPaths = result.RejectedPaths
+        });
     }
 
-    [HttpGet("clients/{id}")]
-    public async Task<IActionResult> GetClient(string id)
-    {
-        try
-        {
-            var client = await clientService.GetClientDetailAsync(id);
-            return Ok(client);
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpPut("clients/{id}")]
-    public async Task<IActionResult> UpdateClient(string id, [FromBody] UpdateClientRequestDto request)
-    {
-        try
-        {
-            var client = await clientService.UpdateClientAsync(id, request);
-            return Ok(new { client.Id, client.GroupId, client.IsBlocked, client.IsActive });
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpDelete("clients/{id}")]
-    public async Task<IActionResult> DeleteClient(string id)
-    {
-        try
-        {
-            await clientService.DeleteClientAsync(id);
-            return NoContent();
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpPost("clients/{id}/block")]
-    public async Task<IActionResult> BlockClient(string id, [FromBody] BlockClientRequestDto request)
-    {
-        try
-        {
-            var blockedBy = HttpContext.Items["Username"]?.ToString() ?? "admin";
-            await clientService.BlockClientAsync(id, request.Reason ?? "No reason provided", blockedBy);
-            return Ok(new { status = "ok", message = "Client blocked" });
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpPost("clients/{id}/unblock")]
-    public async Task<IActionResult> UnblockClient(string id)
-    {
-        try
-        {
-            await clientService.UnblockClientAsync(id);
-            return Ok(new { status = "ok", message = "Client unblocked" });
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    // Groups endpoints
-    [HttpGet("groups")]
-    public async Task<IActionResult> GetGroups()
-    {
-        var groups = await groupService.GetAllGroupsAsync();
-        return Ok(new { groups });
-    }
-
-    [HttpGet("groups/{id}")]
-    public async Task<IActionResult> GetGroup(string id)
-    {
-        try
-        {
-            var group = await groupService.GetGroupDetailAsync(id);
-            return Ok(group);
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpPost("groups")]
-    public async Task<IActionResult> CreateGroup([FromBody] CreateGroupRequestDto request)
-    {
-        try
-        {
-            var group = await groupService.CreateGroupAsync(request.Name, request.Description);
-            return CreatedAtAction(nameof(GetGroup), new { id = group.Id }, group);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpPut("groups/{id}")]
-    public async Task<IActionResult> UpdateGroup(string id, [FromBody] UpdateGroupRequestDto request)
-    {
-        try
-        {
-            var group = await groupService.UpdateGroupAsync(id, request.Name, request.Description);
-            return Ok(group);
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpDelete("groups/{id}")]
-    public async Task<IActionResult> DeleteGroup(string id)
-    {
-        try
-        {
-            await groupService.DeleteGroupAsync(id);
-            return NoContent();
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpPost("users/{userId}/clients")]
-    public async Task<IActionResult> AddUserClientAccess(string userId, [FromBody] AddUserAccessRequestDto request)
-    {
-        try
-        {
-            await groupService.AddUserClientAccessAsync(userId, request.ClientId!);
-            return Ok(new { status = "ok" });
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpDelete("users/{userId}/clients/{clientId}")]
-    public async Task<IActionResult> RemoveUserClientAccess(string userId, string clientId)
-    {
-        try
-        {
-            await groupService.RemoveUserClientAccessAsync(userId, clientId);
-            return NoContent();
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpPost("users/{userId}/groups")]
-    public async Task<IActionResult> AddUserGroupAccess(string userId, [FromBody] AddUserAccessRequestDto request)
-    {
-        try
-        {
-            await groupService.AddUserGroupAccessAsync(userId, request.GroupId!);
-            return Ok(new { status = "ok" });
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
-
-    [HttpDelete("users/{userId}/groups/{groupId}")]
-    public async Task<IActionResult> RemoveUserGroupAccess(string userId, string groupId)
-    {
-        try
-        {
-            await groupService.RemoveUserGroupAccessAsync(userId, groupId);
-            return NoContent();
-        }
-        catch (ArgumentException ex)
-        {
-            return NotFound(new ErrorResponseDto { Error = ex.Message });
-        }
-    }
+    /// <summary>Возвращает сводную статистику обращений.</summary>
+    /// <param name="days">Глубина периода в сутках; без параметра — за всё время.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Сводка.</returns>
+    /// <response code="200">Статистика получена.</response>
+    [HttpGet("stats")]
+    public async Task<IActionResult> GetStats([FromQuery] int? days, CancellationToken cancellationToken)
+        => Ok(await statisticsService.GetStatisticsAsync(days, cancellationToken));
 }

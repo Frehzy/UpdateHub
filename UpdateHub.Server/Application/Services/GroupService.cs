@@ -1,136 +1,171 @@
-﻿using AutoMapper;
+using AutoMapper;
 using UpdateHub.Server.Api.V1.DTOs.Response;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Application.Abstractions.Services;
+using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Entities;
 
 namespace UpdateHub.Server.Application.Services;
 
+/// <summary>Управление группами компьютеров и выдачей прав.</summary>
+/// <param name="groupRepository">Доступ к группам.</param>
+/// <param name="userRepository">Доступ к учётным записям.</param>
+/// <param name="clientRepository">Доступ к компьютерам.</param>
+/// <param name="userClientAccessRepository">Доступ к персональным разрешениям.</param>
+/// <param name="userGroupAccessRepository">Доступ к разрешениям на группы.</param>
+/// <param name="mapper">Преобразование сущностей в модели ответа.</param>
+/// <param name="logger">Журнал.</param>
 public class GroupService(
     IGroupRepository groupRepository,
     IUserRepository userRepository,
+    IClientRepository clientRepository,
     IUserClientAccessRepository userClientAccessRepository,
     IUserGroupAccessRepository userGroupAccessRepository,
-    IClientRepository clientRepository,
     IMapper mapper,
     ILogger<GroupService> logger) : IGroupService
 {
-    public async Task<GroupEntity> CreateGroupAsync(string name, string? description)
+    /// <inheritdoc />
+    public async Task<GroupEntity> CreateAsync(string name, string? description, CancellationToken cancellationToken = default)
     {
-        if (await groupRepository.GetByNameAsync(name) != null)
+        if (string.IsNullOrWhiteSpace(name))
         {
-            throw new InvalidOperationException($"Group '{name}' already exists");
+            throw new ArgumentException("Название группы не может быть пустым");
         }
 
-        var group = new GroupEntity
+        if (await groupRepository.GetByNameAsync(name, cancellationToken) is not null)
         {
-            Name = name,
-            Description = description,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
-            IsActive = true
-        };
+            throw new InvalidOperationException($"Группа '{name}' уже существует");
+        }
 
-        return await groupRepository.CreateAsync(group);
+        var group = new GroupEntity { Name = name, Description = description };
+        await groupRepository.CreateAsync(group, cancellationToken);
+
+        logger.LogInformation("Создана группа {Name}", name);
+        return group;
     }
 
-    public async Task<GroupEntity> UpdateGroupAsync(string groupId, string? name, string? description)
+    /// <inheritdoc />
+    public async Task<GroupEntity> UpdateAsync(
+        string groupId,
+        string? name,
+        string? description,
+        CancellationToken cancellationToken = default)
     {
-        var group = await groupRepository.GetByIdAsync(groupId) ?? throw new ArgumentException($"Group {groupId} not found");
-        if (!string.IsNullOrEmpty(name) && name != group.Name)
+        var group = await groupRepository.GetByIdAsync(groupId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Группа '{groupId}' не найдена");
+
+        if (!string.IsNullOrWhiteSpace(name) && name != group.Name)
         {
-            var existing = await groupRepository.GetByNameAsync(name);
-            if (existing != null && existing.Id != groupId)
+            var rival = await groupRepository.GetByNameAsync(name, cancellationToken);
+            if (rival is not null && rival.Id != groupId)
             {
-                throw new InvalidOperationException($"Group '{name}' already exists");
+                throw new InvalidOperationException($"Группа '{name}' уже существует");
             }
+
             group.Name = name;
         }
 
-        if (description != null)
+        if (description is not null)
+        {
             group.Description = description;
+        }
 
         group.UpdatedAt = DateTime.UtcNow;
-        return await groupRepository.UpdateAsync(group);
+        await groupRepository.UpdateAsync(group, cancellationToken);
+
+        return group;
     }
 
-    public async Task DeleteGroupAsync(string groupId)
+    /// <inheritdoc />
+    public async Task DeleteAsync(string groupId, CancellationToken cancellationToken = default)
     {
-        var group = await groupRepository.GetByIdAsync(groupId) ?? throw new ArgumentException($"Group {groupId} not found");
+        var group = await groupRepository.GetByIdAsync(groupId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Группа '{groupId}' не найдена");
+
         group.IsActive = false;
         group.UpdatedAt = DateTime.UtcNow;
-        await groupRepository.UpdateAsync(group);
+        await groupRepository.UpdateAsync(group, cancellationToken);
+
+        logger.LogInformation("Группа {Name} помечена удалённой", group.Name);
     }
 
-    public async Task<GroupEntity?> GetGroupByIdAsync(string groupId)
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<GroupResponseDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return await groupRepository.GetByIdAsync(groupId);
+        var groups = await groupRepository.GetActiveAsync(cancellationToken);
+        return mapper.Map<List<GroupResponseDto>>(groups);
     }
 
-    public async Task<IEnumerable<GroupResponseDto>> GetAllGroupsAsync()
+    /// <inheritdoc />
+    public async Task<GroupDetailResponseDto> GetDetailAsync(string groupId, CancellationToken cancellationToken = default)
     {
-        var groups = await groupRepository.GetActiveGroupsAsync();
-        return mapper.Map<IEnumerable<GroupResponseDto>>(groups);
-    }
+        var group = await groupRepository.GetByIdAsync(groupId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Группа '{groupId}' не найдена");
 
-    public async Task<GroupDetailResponseDto> GetGroupDetailAsync(string groupId)
-    {
-        var group = await groupRepository.GetByIdAsync(groupId) ?? throw new ArgumentException($"Group {groupId} not found");
         var response = mapper.Map<GroupDetailResponseDto>(group);
-        var clients = await clientRepository.GetAllAsync(groupId);
+        var clients = await clientRepository.SearchAsync(groupId, cancellationToken: cancellationToken);
         response.Clients = mapper.Map<List<ClientResponseDto>>(clients);
+
         return response;
     }
 
-    public async Task AddUserClientAccessAsync(string userId, string clientId)
+    /// <inheritdoc />
+    public async Task GrantClientAccessAsync(string userId, string clientId, CancellationToken cancellationToken = default)
     {
-        _ = await userRepository.GetByIdAsync(userId) ?? throw new ArgumentException("User not found");
-        _ = await clientRepository.GetByIdAsync(clientId) ?? throw new ArgumentException("Client not found");
-        var existing = await userClientAccessRepository.GetByUserAndClientAsync(userId, clientId);
-        if (existing != null)
+        _ = await userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Пользователь '{userId}' не найден");
+        _ = await clientRepository.GetByIdAsync(clientId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Компьютер '{clientId}' не найден");
+
+        if (await userClientAccessRepository.ExistsAsync(userId, clientId, cancellationToken))
         {
-            throw new InvalidOperationException("User already has access to this client");
+            return;
         }
 
-        var access = new UserClientAccessEntity
-        {
-            UserId = userId,
-            ClientId = clientId,
-            CreatedAt = DateTime.UtcNow
-        };
+        await userClientAccessRepository.CreateAsync(
+            new UserClientAccessEntity { UserId = userId, ClientId = clientId },
+            cancellationToken);
 
-        await userClientAccessRepository.CreateAsync(access);
+        logger.LogInformation("Пользователю {UserId} выданы права на компьютер {ClientId}", userId, clientId);
     }
 
-    public async Task RemoveUserClientAccessAsync(string userId, string clientId)
+    /// <inheritdoc />
+    public async Task RevokeClientAccessAsync(string userId, string clientId, CancellationToken cancellationToken = default)
     {
-        var access = await userClientAccessRepository.GetByUserAndClientAsync(userId, clientId) ?? throw new ArgumentException("Access not found");
-        await userClientAccessRepository.DeleteAsync(access.Id);
+        var access = await userClientAccessRepository.GetAsync(userId, clientId, cancellationToken)
+            ?? throw new EntityNotFoundException("Разрешение не найдено");
+
+        await userClientAccessRepository.DeleteAsync(access.Id, cancellationToken);
+        logger.LogInformation("У пользователя {UserId} отозваны права на компьютер {ClientId}", userId, clientId);
     }
 
-    public async Task AddUserGroupAccessAsync(string userId, string groupId)
+    /// <inheritdoc />
+    public async Task GrantGroupAccessAsync(string userId, string groupId, CancellationToken cancellationToken = default)
     {
-        _ = await userRepository.GetByIdAsync(userId) ?? throw new ArgumentException("User not found");
-        _ = await groupRepository.GetByIdAsync(groupId) ?? throw new ArgumentException("Group not found");
-        var existing = await userGroupAccessRepository.GetByUserAndGroupAsync(userId, groupId);
-        if (existing != null)
+        _ = await userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Пользователь '{userId}' не найден");
+        _ = await groupRepository.GetByIdAsync(groupId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Группа '{groupId}' не найдена");
+
+        if (await userGroupAccessRepository.ExistsAsync(userId, groupId, cancellationToken))
         {
-            throw new InvalidOperationException("User already has access to this group");
+            return;
         }
 
-        var access = new UserGroupAccessEntity
-        {
-            UserId = userId,
-            GroupId = groupId,
-            CreatedAt = DateTime.UtcNow
-        };
+        await userGroupAccessRepository.CreateAsync(
+            new UserGroupAccessEntity { UserId = userId, GroupId = groupId },
+            cancellationToken);
 
-        await userGroupAccessRepository.CreateAsync(access);
+        logger.LogInformation("Пользователю {UserId} выданы права на группу {GroupId}", userId, groupId);
     }
 
-    public async Task RemoveUserGroupAccessAsync(string userId, string groupId)
+    /// <inheritdoc />
+    public async Task RevokeGroupAccessAsync(string userId, string groupId, CancellationToken cancellationToken = default)
     {
-        var access = await userGroupAccessRepository.GetByUserAndGroupAsync(userId, groupId) ?? throw new ArgumentException("Access not found");
-        await userGroupAccessRepository.DeleteAsync(access.Id);
+        var access = await userGroupAccessRepository.GetAsync(userId, groupId, cancellationToken)
+            ?? throw new EntityNotFoundException("Разрешение не найдено");
+
+        await userGroupAccessRepository.DeleteAsync(access.Id, cancellationToken);
+        logger.LogInformation("У пользователя {UserId} отозваны права на группу {GroupId}", userId, groupId);
     }
 }

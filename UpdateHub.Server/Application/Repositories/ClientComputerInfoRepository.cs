@@ -1,19 +1,22 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Infrastructure.Database;
 
 namespace UpdateHub.Server.Application.Repositories;
 
-public class ClientComputerInfoRepository(AppDbContext context) : BaseRepository<ClientComputerInfoEntity>(context), IClientComputerInfoRepository
+/// <summary>Доступ к сведениям о железе компьютеров.</summary>
+/// <param name="context">Контекст базы данных.</param>
+public class ClientComputerInfoRepository(AppDbContext context)
+    : BaseRepository<ClientComputerInfoEntity, string>(context), IClientComputerInfoRepository
 {
-    public async Task<ClientComputerInfoEntity?> GetByClientIdAsync(string clientId)
-    {
-        return await _dbSet.FirstOrDefaultAsync(x => x.ClientId == clientId);
-    }
+    /// <inheritdoc />
+    public Task<ClientComputerInfoEntity?> GetByClientIdAsync(string clientId, CancellationToken cancellationToken = default)
+        => Set.FirstOrDefaultAsync(x => x.ClientId == clientId, cancellationToken);
 
-    public async Task<ClientComputerInfoEntity?> GetByHostnameAsync(string hostname)
-    {
-        return await _dbSet.FirstOrDefaultAsync(x => x.Hostname == hostname);
-    }
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ClientComputerInfoEntity>> GetByFingerprintAsync(
+        string fingerprint,
+        CancellationToken cancellationToken = default)
+        => await Set.Where(x => x.HardwareFingerprint == fingerprint).ToListAsync(cancellationToken);
 }
