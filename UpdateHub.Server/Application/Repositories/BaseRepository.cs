@@ -1,45 +1,90 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Infrastructure.Database;
 
 namespace UpdateHub.Server.Application.Repositories;
 
-public abstract class BaseRepository<T>(AppDbContext context) : IRepository<T> where T : class
+/// <summary>
+/// Реализация базовых операций поверх EF Core.
+/// </summary>
+/// <typeparam name="TEntity">Тип сущности.</typeparam>
+/// <typeparam name="TKey">Тип первичного ключа.</typeparam>
+/// <param name="context">Контекст базы данных.</param>
+public abstract class BaseRepository<TEntity, TKey>(AppDbContext context)
+    : IRepository<TEntity, TKey> where TEntity : class
 {
-    protected readonly AppDbContext _context = context;
-    protected readonly DbSet<T> _dbSet = context.Set<T>();
+    /// <summary>Контекст базы данных.</summary>
+    protected AppDbContext Context { get; } = context;
 
-    public virtual async Task<T> CreateAsync(T entity)
+    /// <summary>Набор сущностей текущего типа.</summary>
+    protected DbSet<TEntity> Set { get; } = context.Set<TEntity>();
+
+    /// <inheritdoc />
+    public virtual async Task<TEntity> CreateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
-        await _dbSet.AddAsync(entity);
-        await _context.SaveChangesAsync();
+        await Set.AddAsync(entity, cancellationToken);
+        await Context.SaveChangesAsync(cancellationToken);
         return entity;
     }
 
-    public virtual async Task<T?> GetByIdAsync(string id)
+    /// <inheritdoc />
+    public virtual async Task<TEntity?> GetByIdAsync(TKey id, CancellationToken cancellationToken = default)
     {
-        return await _dbSet.FindAsync(id);
+        return await Set.FindAsync([id], cancellationToken);
     }
 
-    public virtual async Task<IEnumerable<T>> GetAllAsync()
+    /// <inheritdoc />
+    public virtual async Task<IReadOnlyList<TEntity>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return await _dbSet.ToListAsync();
+        return await Set.ToListAsync(cancellationToken);
     }
 
-    public virtual async Task<T> UpdateAsync(T entity)
+    /// <inheritdoc />
+    /// <remarks>
+    /// Если сущность уже отслеживается контекстом, вызов <c>Update</c> не нужен
+    /// и вреден — он помечает изменёнными все поля и цепляет граф навигационных
+    /// свойств. Поэтому состояние проверяется явно.
+    /// </remarks>
+    public virtual async Task<TEntity> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
-        _dbSet.Update(entity);
-        await _context.SaveChangesAsync();
-        return entity;
-    }
-
-    public virtual async Task DeleteAsync(string id)
-    {
-        var entity = await GetByIdAsync(id);
-        if (entity != null)
+        if (Context.Entry(entity).State == EntityState.Detached)
         {
-            _dbSet.Remove(entity);
-            await _context.SaveChangesAsync();
+            Set.Update(entity);
         }
+
+        await Context.SaveChangesAsync(cancellationToken);
+        return entity;
+    }
+
+    /// <inheritdoc />
+    public virtual async Task DeleteAsync(TKey id, CancellationToken cancellationToken = default)
+    {
+        var entity = await GetByIdAsync(id, cancellationToken);
+        if (entity is null)
+        {
+            return;
+        }
+
+        Set.Remove(entity);
+        await Context.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Добавляет сущность в контекст без сохранения.
+    /// Нужен для пакетной записи, когда один <c>SaveChanges</c> покрывает много строк.
+    /// </summary>
+    /// <param name="entity">Добавляемая сущность.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    public async Task AddWithoutSaveAsync(TEntity entity, CancellationToken cancellationToken = default)
+    {
+        await Set.AddAsync(entity, cancellationToken);
+    }
+
+    /// <summary>Сохраняет все накопленные в контексте изменения.</summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Число затронутых строк.</returns>
+    public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        return Context.SaveChangesAsync(cancellationToken);
     }
 }

@@ -1,24 +1,26 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Infrastructure.Database;
 
 namespace UpdateHub.Server.Application.Repositories;
 
-public class UserGroupAccessRepository(AppDbContext context) : BaseRepository<UserGroupAccessEntity>(context), IUserGroupAccessRepository
+/// <summary>Доступ к разрешениям на группы компьютеров.</summary>
+/// <param name="context">Контекст базы данных.</param>
+public class UserGroupAccessRepository(AppDbContext context)
+    : BaseRepository<UserGroupAccessEntity, string>(context), IUserGroupAccessRepository
 {
-    public async Task<UserGroupAccessEntity?> GetByUserAndGroupAsync(string userId, string groupId)
-    {
-        return await _dbSet.FirstOrDefaultAsync(x => x.UserId == userId && x.GroupId == groupId);
-    }
+    /// <inheritdoc />
+    public Task<bool> ExistsAsync(string userId, string groupId, CancellationToken cancellationToken = default)
+        => Set.AnyAsync(x => x.UserId == userId && x.GroupId == groupId, cancellationToken);
 
-    public async Task<IEnumerable<UserGroupAccessEntity>> GetByUserIdAsync(string userId)
-    {
-        return await _dbSet.Where(x => x.UserId == userId).ToListAsync();
-    }
+    /// <inheritdoc />
+    public Task<UserGroupAccessEntity?> GetAsync(string userId, string groupId, CancellationToken cancellationToken = default)
+        => Set.FirstOrDefaultAsync(x => x.UserId == userId && x.GroupId == groupId, cancellationToken);
 
-    public async Task<IEnumerable<UserGroupAccessEntity>> GetByGroupIdAsync(string groupId)
-    {
-        return await _dbSet.Where(x => x.GroupId == groupId).ToListAsync();
-    }
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<UserGroupAccessEntity>> GetByUserIdAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
+        => await Set.Where(x => x.UserId == userId).ToListAsync(cancellationToken);
 }

@@ -1,7 +1,11 @@
-﻿namespace UpdateHub.Server.Domain.Enums;
+namespace UpdateHub.Server.Domain.Enums;
 
+/// <summary>Тип обращения клиента к серверу обновлений.</summary>
 public enum RequestType
 {
+    /// <summary>Сравнение манифестов без намерения скачивать.</summary>
     Check,
-    Update
+
+    /// <summary>Сравнение манифестов перед скачиванием файлов.</summary>
+    Sync
 }

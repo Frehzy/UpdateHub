@@ -1,8 +1,18 @@
-﻿using UpdateHub.Server.Domain.Entities;
+using UpdateHub.Server.Domain.Entities;
 
 namespace UpdateHub.Server.Application.Abstractions.Repositories;
 
-public interface IUpdateDetailRepository : IRepository<UpdateDetailEntity>
+/// <summary>Доступ к пофайловой детализации обращений.</summary>
+public interface IUpdateDetailRepository : IRepository<UpdateDetailEntity, int>
 {
-    Task<IEnumerable<UpdateDetailEntity>> GetByUpdateRequestIdAsync(int updateRequestId);
+    /// <summary>Возвращает детализацию конкретного обращения.</summary>
+    /// <param name="updateRequestId">Идентификатор обращения.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список записей.</returns>
+    Task<IReadOnlyList<UpdateDetailEntity>> GetByRequestIdAsync(int updateRequestId, CancellationToken cancellationToken = default);
+
+    /// <summary>Добавляет пачку записей одним сохранением.</summary>
+    /// <param name="details">Добавляемые записи.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    Task AddRangeAsync(IReadOnlyCollection<UpdateDetailEntity> details, CancellationToken cancellationToken = default);
 }

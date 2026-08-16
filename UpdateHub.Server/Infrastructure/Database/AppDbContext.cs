@@ -1,72 +1,122 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UpdateHub.Server.Domain.Entities;
 
 namespace UpdateHub.Server.Infrastructure.Database;
 
+/// <summary>
+/// Контекст базы данных SQLite.
+/// </summary>
+/// <remarks>
+/// Файл базы обязан лежать на именованном томе Docker. Размещать его
+/// в проброшенной с Windows папке нельзя: блокировки файлов через 9p/virtiofs
+/// работают неправильно и приводят к ошибкам «database is locked» и порче базы.
+/// </remarks>
+/// <param name="options">Параметры контекста.</param>
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public DbSet<UserEntity> Users { get; set; }
-    public DbSet<RefreshTokenEntity> RefreshTokens { get; set; }
-    public DbSet<GroupEntity> Groups { get; set; }
-    public DbSet<ClientEntity> Clients { get; set; }
-    public DbSet<ClientComputerInfoEntity> ClientComputerInfos { get; set; }
-    public DbSet<ClientNetworkInfoEntity> ClientNetworkInfos { get; set; }
-    public DbSet<ClientSessionEntity> ClientSessions { get; set; }
-    public DbSet<ClientBlockHistoryEntity> ClientBlockHistories { get; set; }
-    public DbSet<ClientHistoryEntity> ClientHistories { get; set; }
-    public DbSet<UserClientAccessEntity> UserClientAccesses { get; set; }
-    public DbSet<UserGroupAccessEntity> UserGroupAccesses { get; set; }
-    public DbSet<ManifestEntryEntity> ManifestEntries { get; set; }
-    public DbSet<UpdateRequestEntity> UpdateRequests { get; set; }
-    public DbSet<UpdateDetailEntity> UpdateDetails { get; set; }
-    public DbSet<FileChangeEntity> FileChanges { get; set; }
+    /// <summary>Учётные записи пользователей.</summary>
+    public DbSet<UserEntity> Users => Set<UserEntity>();
 
+    /// <summary>Выданные refresh-токены.</summary>
+    public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
+
+    /// <summary>Группы компьютеров.</summary>
+    public DbSet<GroupEntity> Groups => Set<GroupEntity>();
+
+    /// <summary>Компьютеры.</summary>
+    public DbSet<ClientEntity> Clients => Set<ClientEntity>();
+
+    /// <summary>Сведения о железе компьютеров.</summary>
+    public DbSet<ClientComputerInfoEntity> ClientComputerInfos => Set<ClientComputerInfoEntity>();
+
+    /// <summary>Сетевые адреса компьютеров.</summary>
+    public DbSet<ClientNetworkInfoEntity> ClientNetworkInfos => Set<ClientNetworkInfoEntity>();
+
+    /// <summary>История блокировок компьютеров.</summary>
+    public DbSet<ClientBlockHistoryEntity> ClientBlockHistories => Set<ClientBlockHistoryEntity>();
+
+    /// <summary>История изменений характеристик компьютеров.</summary>
+    public DbSet<ClientHistoryEntity> ClientHistories => Set<ClientHistoryEntity>();
+
+    /// <summary>Персональные разрешения на компьютеры.</summary>
+    public DbSet<UserClientAccessEntity> UserClientAccesses => Set<UserClientAccessEntity>();
+
+    /// <summary>Разрешения на группы компьютеров.</summary>
+    public DbSet<UserGroupAccessEntity> UserGroupAccesses => Set<UserGroupAccessEntity>();
+
+    /// <summary>Записи эталонного манифеста.</summary>
+    public DbSet<ManifestEntryEntity> ManifestEntries => Set<ManifestEntryEntity>();
+
+    /// <summary>Журнал обращений клиентов.</summary>
+    public DbSet<UpdateRequestEntity> UpdateRequests => Set<UpdateRequestEntity>();
+
+    /// <summary>Пофайловая детализация обращений.</summary>
+    public DbSet<UpdateDetailEntity> UpdateDetails => Set<UpdateDetailEntity>();
+
+    /// <summary>История изменений файлов каталога раздачи.</summary>
+    public DbSet<FileChangeEntity> FileChanges => Set<FileChangeEntity>();
+
+    /// <summary>Заявки на регистрацию компьютеров.</summary>
+    public DbSet<EnrollmentRequestEntity> EnrollmentRequests => Set<EnrollmentRequestEntity>();
+
+    /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Конвертация enum в string
-        modelBuilder.Entity<UserEntity>()
-            .Property(e => e.Role)
-            .HasConversion<string>();
+        ConfigureEnumConversions(modelBuilder);
+        ConfigureKeysAndIndexes(modelBuilder);
+        ConfigureRelationships(modelBuilder);
+    }
 
-        modelBuilder.Entity<ClientHistoryEntity>()
-            .Property(e => e.ChangeType)
-            .HasConversion<string>();
+    /// <summary>
+    /// Хранит перечисления строками, чтобы значения оставались читаемыми
+    /// при прямом просмотре базы и не зависели от порядка объявления.
+    /// </summary>
+    /// <param name="modelBuilder">Построитель модели.</param>
+    private static void ConfigureEnumConversions(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<UserEntity>().Property(e => e.Role).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<ClientHistoryEntity>().Property(e => e.ChangeType).HasConversion<string>().HasMaxLength(64);
+        modelBuilder.Entity<UpdateRequestEntity>().Property(e => e.RequestType).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<UpdateRequestEntity>().Property(e => e.Status).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<FileChangeEntity>().Property(e => e.ChangeType).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<EnrollmentRequestEntity>().Property(e => e.Status).HasConversion<string>().HasMaxLength(32);
+    }
 
-        modelBuilder.Entity<UpdateRequestEntity>()
-            .Property(e => e.RequestType)
-            .HasConversion<string>();
+    /// <summary>Настраивает уникальные ограничения и индексы под используемые запросы.</summary>
+    /// <param name="modelBuilder">Построитель модели.</param>
+    private static void ConfigureKeysAndIndexes(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<UserEntity>().HasIndex(e => e.Username).IsUnique();
+        modelBuilder.Entity<GroupEntity>().HasIndex(e => e.Name).IsUnique();
+        modelBuilder.Entity<ManifestEntryEntity>().HasIndex(e => e.RelativePath).IsUnique();
 
-        modelBuilder.Entity<UpdateRequestEntity>()
-            .Property(e => e.Status)
-            .HasConversion<string>();
+        modelBuilder.Entity<RefreshTokenEntity>().HasIndex(e => e.Token).IsUnique();
+        modelBuilder.Entity<RefreshTokenEntity>().HasIndex(e => e.UserId);
 
-        modelBuilder.Entity<FileChangeEntity>()
-            .Property(e => e.ChangeType)
-            .HasConversion<string>();
+        modelBuilder.Entity<UserClientAccessEntity>().HasIndex(e => new { e.UserId, e.ClientId }).IsUnique();
+        modelBuilder.Entity<UserGroupAccessEntity>().HasIndex(e => new { e.UserId, e.GroupId }).IsUnique();
 
-        // Уникальные индексы
-        modelBuilder.Entity<UserEntity>()
-            .HasIndex(e => e.Username)
-            .IsUnique();
+        modelBuilder.Entity<ClientComputerInfoEntity>().HasIndex(e => e.ClientId).IsUnique();
+        modelBuilder.Entity<ClientComputerInfoEntity>().HasIndex(e => e.HardwareFingerprint);
+        modelBuilder.Entity<ClientNetworkInfoEntity>().HasIndex(e => new { e.ClientId, e.IpAddress }).IsUnique();
 
-        modelBuilder.Entity<GroupEntity>()
-            .HasIndex(e => e.Name)
-            .IsUnique();
+        modelBuilder.Entity<ClientEntity>().HasIndex(e => e.IsActive);
+        modelBuilder.Entity<ClientEntity>().HasIndex(e => e.GroupId);
+        modelBuilder.Entity<ClientHistoryEntity>().HasIndex(e => new { e.ClientId, e.ChangeTimestamp });
+        modelBuilder.Entity<ClientBlockHistoryEntity>().HasIndex(e => new { e.ClientId, e.CreatedAt });
+        modelBuilder.Entity<UpdateRequestEntity>().HasIndex(e => e.RequestTimestamp);
+        modelBuilder.Entity<UpdateRequestEntity>().HasIndex(e => new { e.ClientId, e.RequestTimestamp });
+        modelBuilder.Entity<UpdateDetailEntity>().HasIndex(e => e.UpdateRequestId);
+        modelBuilder.Entity<FileChangeEntity>().HasIndex(e => e.ChangeTimestamp);
+        modelBuilder.Entity<EnrollmentRequestEntity>().HasIndex(e => e.Status);
+        modelBuilder.Entity<EnrollmentRequestEntity>().HasIndex(e => e.ClientId);
+    }
 
-        modelBuilder.Entity<ManifestEntryEntity>()
-            .HasIndex(e => e.RelativePath)
-            .IsUnique();
-
-        // Составные уникальные индексы
-        modelBuilder.Entity<UserClientAccessEntity>()
-            .HasIndex(e => new { e.UserId, e.ClientId })
-            .IsUnique();
-
-        modelBuilder.Entity<UserGroupAccessEntity>()
-            .HasIndex(e => new { e.UserId, e.GroupId })
-            .IsUnique();
-
-        // Внешние ключи с каскадным удалением
+    /// <summary>Настраивает связи и поведение при удалении.</summary>
+    /// <param name="modelBuilder">Построитель модели.</param>
+    private static void ConfigureRelationships(ModelBuilder modelBuilder)
+    {
+        // Удаление группы не удаляет компьютеры — они просто остаются без группы.
         modelBuilder.Entity<ClientEntity>()
             .HasOne(e => e.Group)
             .WithMany(e => e.Clients)
@@ -82,12 +132,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<ClientNetworkInfoEntity>()
             .HasOne(e => e.Client)
             .WithMany(e => e.NetworkInfos)
-            .HasForeignKey(e => e.ClientId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        modelBuilder.Entity<ClientSessionEntity>()
-            .HasOne(e => e.Client)
-            .WithMany(e => e.Sessions)
             .HasForeignKey(e => e.ClientId)
             .OnDelete(DeleteBehavior.Cascade);
 
@@ -110,10 +154,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<UpdateDetailEntity>()
+            .HasOne(e => e.UpdateRequest)
+            .WithMany(e => e.UpdateDetails)
+            .HasForeignKey(e => e.UpdateRequestId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Файл может исчезнуть из манифеста, а запись о выдаче должна пережить это.
+        modelBuilder.Entity<UpdateDetailEntity>()
             .HasOne(e => e.ManifestEntry)
             .WithMany(e => e.UpdateDetails)
             .HasForeignKey(e => e.ManifestEntryId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.SetNull);
 
         modelBuilder.Entity<FileChangeEntity>()
             .HasOne(e => e.ManifestEntry)
@@ -121,13 +172,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(e => e.ManifestEntryId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // Индексы для производительности
-        modelBuilder.Entity<ClientEntity>().HasIndex(e => e.IsActive);
-        modelBuilder.Entity<ClientEntity>().HasIndex(e => e.IsBlocked);
-        modelBuilder.Entity<ClientNetworkInfoEntity>().HasIndex(e => e.IpAddress);
-        modelBuilder.Entity<ClientNetworkInfoEntity>().HasIndex(e => e.LastSeen);
-        modelBuilder.Entity<ClientSessionEntity>().HasIndex(e => e.IsActive);
-        modelBuilder.Entity<UpdateRequestEntity>().HasIndex(e => e.RequestTimestamp);
-        modelBuilder.Entity<FileChangeEntity>().HasIndex(e => e.IsProcessed);
+        modelBuilder.Entity<RefreshTokenEntity>()
+            .HasOne(e => e.User)
+            .WithMany(e => e.RefreshTokens)
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserClientAccessEntity>()
+            .HasOne(e => e.User)
+            .WithMany(e => e.UserClientAccesses)
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserClientAccessEntity>()
+            .HasOne(e => e.Client)
+            .WithMany(e => e.UserClientAccesses)
+            .HasForeignKey(e => e.ClientId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserGroupAccessEntity>()
+            .HasOne(e => e.User)
+            .WithMany(e => e.UserGroupAccesses)
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserGroupAccessEntity>()
+            .HasOne(e => e.Group)
+            .WithMany(e => e.UserGroupAccesses)
+            .HasForeignKey(e => e.GroupId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

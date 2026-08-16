@@ -1,9 +1,18 @@
-﻿using UpdateHub.Server.Domain.Entities;
+using UpdateHub.Server.Domain.Entities;
 
 namespace UpdateHub.Server.Application.Abstractions.Repositories;
 
-public interface IGroupRepository : IRepository<GroupEntity>
+/// <summary>Доступ к группам компьютеров.</summary>
+public interface IGroupRepository : IRepository<GroupEntity, string>
 {
-    Task<GroupEntity?> GetByNameAsync(string name);
-    Task<IEnumerable<GroupEntity>> GetActiveGroupsAsync();
+    /// <summary>Ищет активную группу по названию.</summary>
+    /// <param name="name">Название группы.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Группа либо <see langword="null"/>.</returns>
+    Task<GroupEntity?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>Возвращает активные группы вместе с числом компьютеров.</summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список групп.</returns>
+    Task<IReadOnlyList<GroupEntity>> GetActiveAsync(CancellationToken cancellationToken = default);
 }

@@ -1,19 +1,36 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Domain.Entities;
+using UpdateHub.Server.Domain.Enums;
 using UpdateHub.Server.Infrastructure.Database;
 
 namespace UpdateHub.Server.Application.Repositories;
 
-public class UserRepository(AppDbContext context) : BaseRepository<UserEntity>(context), IUserRepository
+/// <summary>Доступ к учётным записям пользователей.</summary>
+/// <param name="context">Контекст базы данных.</param>
+public class UserRepository(AppDbContext context)
+    : BaseRepository<UserEntity, string>(context), IUserRepository
 {
-    public async Task<UserEntity?> GetByUsernameAsync(string username)
-    {
-        return await _dbSet.FirstOrDefaultAsync(x => x.Username == username);
-    }
+    /// <inheritdoc />
+    public Task<UserEntity?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
+        => Set.FirstOrDefaultAsync(x => x.Username == username, cancellationToken);
 
-    public async Task<IEnumerable<UserEntity>> GetByRoleAsync(string role)
-    {
-        return await _dbSet.Where(x => x.Role.ToString() == role && x.IsActive).ToListAsync();
-    }
+    /// <inheritdoc />
+    /// <remarks>
+    /// Сравнение идёт по значению перечисления, а не по результату <c>ToString()</c>:
+    /// EF Core хранит роль строкой через преобразователь и умеет сравнивать её сам.
+    /// </remarks>
+    public async Task<IReadOnlyList<UserEntity>> GetByRoleAsync(UserRole role, CancellationToken cancellationToken = default)
+        => await Set.Where(x => x.Role == role && x.IsActive).ToListAsync(cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<bool> IsEmptyAsync(CancellationToken cancellationToken = default)
+        => !await Set.AnyAsync(cancellationToken);
+
+    /// <inheritdoc />
+    public Task<UserEntity?> GetByIdWithAccessAsync(string userId, CancellationToken cancellationToken = default)
+        => Set
+            .Include(u => u.UserClientAccesses).ThenInclude(a => a.Client).ThenInclude(c => c!.ComputerInfo)
+            .Include(u => u.UserGroupAccesses).ThenInclude(a => a.Group)
+            .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
 }

@@ -1,16 +1,32 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Infrastructure.Database;
 
 namespace UpdateHub.Server.Application.Repositories;
 
-public class UpdateDetailRepository(AppDbContext context) : BaseRepository<UpdateDetailEntity>(context), IUpdateDetailRepository
+/// <summary>Доступ к пофайловой детализации обращений.</summary>
+/// <param name="context">Контекст базы данных.</param>
+public class UpdateDetailRepository(AppDbContext context)
+    : BaseRepository<UpdateDetailEntity, int>(context), IUpdateDetailRepository
 {
-    public async Task<IEnumerable<UpdateDetailEntity>> GetByUpdateRequestIdAsync(int updateRequestId)
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<UpdateDetailEntity>> GetByRequestIdAsync(
+        int updateRequestId,
+        CancellationToken cancellationToken = default)
+        => await Set.Where(x => x.UpdateRequestId == updateRequestId).ToListAsync(cancellationToken);
+
+    /// <inheritdoc />
+    public async Task AddRangeAsync(
+        IReadOnlyCollection<UpdateDetailEntity> details,
+        CancellationToken cancellationToken = default)
     {
-        return await _dbSet
-            .Where(x => x.UpdateRequestId == updateRequestId)
-            .ToListAsync();
+        if (details.Count == 0)
+        {
+            return;
+        }
+
+        await Set.AddRangeAsync(details, cancellationToken);
+        await Context.SaveChangesAsync(cancellationToken);
     }
 }
