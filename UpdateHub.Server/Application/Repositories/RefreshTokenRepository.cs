@@ -22,6 +22,12 @@ public class RefreshTokenRepository(AppDbContext context)
         => Set.AsNoTracking().FirstOrDefaultAsync(x => x.Token == tokenHash, cancellationToken);
 
     /// <inheritdoc />
+    public Task<int> RevokeAsync(string tokenHash, CancellationToken cancellationToken = default)
+        => Set
+            .Where(x => x.Token == tokenHash && x.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, (DateTime?)DateTime.UtcNow), cancellationToken);
+
+    /// <inheritdoc />
     public Task<int> RevokeAllForUserAsync(string userId, CancellationToken cancellationToken = default)
         => Set
             .Where(x => x.UserId == userId && x.RevokedAt == null)

@@ -125,8 +125,7 @@ public class AuthService(
 
         // Ротация: старый токен отзывается сразу, чтобы перехваченным значением
         // нельзя было воспользоваться после законного владельца.
-        stored.RevokedAt = DateTime.UtcNow;
-        await refreshTokenRepository.UpdateAsync(stored, cancellationToken);
+        await refreshTokenRepository.RevokeAsync(hash, cancellationToken);
 
         return await IssueTokensAsync(user, null, context, cancellationToken);
     }
@@ -137,13 +136,14 @@ public class AuthService(
         var hash = tokenGenerator.HashRefreshToken(refreshToken);
         var stored = await refreshTokenRepository.GetByHashAsync(hash, cancellationToken);
 
+        // Чужой токен отозвать нельзя: иначе, зная значение, можно было бы
+        // разлогинить другого пользователя.
         if (stored is null || stored.UserId != userId || stored.RevokedAt is not null)
         {
             return;
         }
 
-        stored.RevokedAt = DateTime.UtcNow;
-        await refreshTokenRepository.UpdateAsync(stored, cancellationToken);
+        await refreshTokenRepository.RevokeAsync(hash, cancellationToken);
     }
 
     /// <inheritdoc />
