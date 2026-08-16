@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Reflection;
 using UpdateHub.Server.Api.V1.Mappers;
 using UpdateHub.Server.Infrastructure.Database;
+using UpdateHub.Server.Infrastructure.Diagnostics;
 using UpdateHub.Server.Infrastructure.Extensions;
 using UpdateHub.Server.Infrastructure.Middleware;
 
@@ -112,5 +113,8 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHealthChecks("/health").AllowAnonymous();
+
+// Сводка печатается после старта: до этого момента Kestrel ещё не назначил адреса.
+app.Lifetime.ApplicationStarted.Register(() => StartupSummary.Log(app));
 
 app.Run();
