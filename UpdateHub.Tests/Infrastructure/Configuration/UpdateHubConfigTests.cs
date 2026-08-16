@@ -19,17 +19,20 @@ public class UpdateHubConfigTests
     /// каталога процесса.
     /// </summary>
     [Fact]
-    public void Resolve_ОтносительныйПуть_РазрешаетсяОтКаталогаСборки()
+    public void Resolve_RelativePath_ResolvedAgainstBaseDirectory()
     {
         var resolved = UpdateHubConfig.Resolve("files");
 
-        Assert.StartsWith(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), resolved, StringComparison.Ordinal);
+        Assert.StartsWith(
+            AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar),
+            resolved,
+            StringComparison.Ordinal);
         Assert.True(Path.IsPathRooted(resolved));
     }
 
     /// <summary>Путь с ведущим «./» разрешается так же, как без него.</summary>
     [Fact]
-    public void Resolve_ПутьСТочкой_РавенПутиБезНеё()
+    public void Resolve_PathWithLeadingDot_EqualsPathWithout()
     {
         Assert.Equal(UpdateHubConfig.Resolve("files"), UpdateHubConfig.Resolve("./files"));
     }
@@ -39,7 +42,7 @@ public class UpdateHubConfigTests
     /// и подменять их каталогом сборки нельзя.
     /// </summary>
     [Fact]
-    public void Resolve_АбсолютныйПуть_НеИзменяется()
+    public void Resolve_AbsolutePath_LeftUnchanged()
     {
         var absolute = OperatingSystem.IsWindows() ? @"C:\updatehub\files" : "/app/files";
 
@@ -50,7 +53,7 @@ public class UpdateHubConfigTests
 
     /// <summary>Вложенный относительный путь сохраняет структуру подкаталогов.</summary>
     [Fact]
-    public void Resolve_ВложенныйПуть_СохраняетСтруктуру()
+    public void Resolve_NestedRelativePath_KeepsStructure()
     {
         var resolved = UpdateHubConfig.Resolve("data/updatehub.db");
 
@@ -66,7 +69,7 @@ public class UpdateHubConfigTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData(null)]
-    public void Resolve_ПустоеЗначение_ДаётКаталогСборки(string? path)
+    public void Resolve_EmptyValue_ReturnsBaseDirectory(string? path)
     {
         var resolved = UpdateHubConfig.Resolve(path!);
 
@@ -75,7 +78,7 @@ public class UpdateHubConfigTests
 
     /// <summary>Свойства с готовыми путями согласованы с методом приведения.</summary>
     [Fact]
-    public void ГотовыеПути_СогласованыСМетодомПриведения()
+    public void ResolvedPathProperties_MatchResolveMethod()
     {
         var config = new UpdateHubConfig { FilesPath = "files", DatabasePath = "data/updatehub.db" };
 
@@ -88,7 +91,7 @@ public class UpdateHubConfigTests
     /// Windows в <c>/app/files</c>, а базу держит на именованном томе.
     /// </summary>
     [Fact]
-    public void ЗначенияПоУмолчанию_РассчитаныНаDocker()
+    public void DefaultValues_TargetDockerLayout()
     {
         var config = new UpdateHubConfig();
 

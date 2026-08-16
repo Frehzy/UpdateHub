@@ -13,12 +13,13 @@ namespace UpdateHub.Tests.Infrastructure.Security;
 /// </remarks>
 public class PasswordHasherTests
 {
-    /// <summary>Заниженная стоимость, чтобы тесты шли быстро.</summary>
+    /// <summary>Создаёт хэшер с заниженной стоимостью, чтобы тесты шли быстро.</summary>
+    /// <returns>Готовый хэшер.</returns>
     private static PasswordHasher CreateHasher() => new(workFactor: 4);
 
     /// <summary>Правильный пароль проходит проверку.</summary>
     [Fact]
-    public void VerifyPassword_ВерныйПароль_Принимается()
+    public void VerifyPassword_CorrectPassword_Accepted()
     {
         var hasher = CreateHasher();
         var hash = hasher.HashPassword("правильный-пароль");
@@ -28,7 +29,7 @@ public class PasswordHasherTests
 
     /// <summary>Неправильный пароль отклоняется.</summary>
     [Fact]
-    public void VerifyPassword_НеверныйПароль_Отклоняется()
+    public void VerifyPassword_WrongPassword_Rejected()
     {
         var hasher = CreateHasher();
         var hash = hasher.HashPassword("правильный-пароль");
@@ -38,7 +39,7 @@ public class PasswordHasherTests
 
     /// <summary>Проверка чувствительна к регистру.</summary>
     [Fact]
-    public void VerifyPassword_ОтличаетсяРегистр_Отклоняется()
+    public void VerifyPassword_DifferentCase_Rejected()
     {
         var hasher = CreateHasher();
         var hash = hasher.HashPassword("Пароль");
@@ -52,7 +53,7 @@ public class PasswordHasherTests
     /// в базе как совпадающие строки.
     /// </summary>
     [Fact]
-    public void HashPassword_ОдинПароль_ДаётРазныеХэши()
+    public void HashPassword_SamePassword_ProducesDifferentHashes()
     {
         var hasher = CreateHasher();
 
@@ -66,7 +67,7 @@ public class PasswordHasherTests
 
     /// <summary>Открытый пароль в хэш не попадает.</summary>
     [Fact]
-    public void HashPassword_НеСодержитИсходныйПароль()
+    public void HashPassword_DoesNotContainOriginalPassword()
     {
         var hasher = CreateHasher();
 
@@ -80,7 +81,7 @@ public class PasswordHasherTests
     [InlineData("пароль-по-русски")]
     [InlineData("Sp3c!@l#Ch$rs%^&*()")]
     [InlineData("оченьдлинныйпарольизмногихсимволовподряд1234567890")]
-    public void HashPassword_РазныеПароли_ПроверяютсяКорректно(string password)
+    public void HashPassword_VariousPasswords_VerifiedCorrectly(string password)
     {
         var hasher = CreateHasher();
         var hash = hasher.HashPassword(password);
@@ -90,13 +91,16 @@ public class PasswordHasherTests
 
     /// <summary>
     /// Испорченный хэш в базе не роняет вход, а трактуется как неверный пароль.
-    /// Иначе одна битая строка сделала бы недоступным весь эндпоинт входа.
+    /// Пустая строка даёт ArgumentException, а испорченная соль —
+    /// SaltParseException: перехватывать нужно оба, иначе одна битая запись
+    /// делает недоступным весь эндпоинт входа.
     /// </summary>
     [Theory]
     [InlineData("")]
+    [InlineData("   ")]
     [InlineData("не-хэш-вовсе")]
     [InlineData("$2a$обрезанный")]
-    public void VerifyPassword_ИспорченныйХэш_ВозвращаетЛожьБезИсключения(string brokenHash)
+    public void VerifyPassword_CorruptedHash_ReturnsFalseWithoutThrowing(string brokenHash)
     {
         var hasher = CreateHasher();
 
@@ -111,7 +115,7 @@ public class PasswordHasherTests
     /// не обесценивает уже заведённые учётные записи.
     /// </summary>
     [Fact]
-    public void VerifyPassword_ХэшСДругойСтоимостью_ПроверяетсяКорректно()
+    public void VerifyPassword_HashWithDifferentWorkFactor_VerifiedCorrectly()
     {
         var oldHasher = new PasswordHasher(workFactor: 4);
         var newHasher = new PasswordHasher(workFactor: 6);

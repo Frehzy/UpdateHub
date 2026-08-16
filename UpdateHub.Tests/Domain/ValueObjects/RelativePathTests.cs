@@ -21,7 +21,7 @@ public class RelativePathTests
     [InlineData("файл.txt")]
     [InlineData("dir/файл с пробелом.txt")]
     [InlineData("astra176.iso")]
-    public void TryCreate_ДопустимыйПуть_Принимается(string path)
+    public void TryCreate_ValidPath_Accepted(string path)
     {
         var ok = RelativePath.TryCreate(path, out var result, out var error);
 
@@ -31,19 +31,36 @@ public class RelativePathTests
     }
 
     /// <summary>
-    /// Ведущие и завершающие слэши срезаются: <c>/dir/file/</c> и <c>dir/file</c>
-    /// обозначают один и тот же файл, и в манифесте они должны совпасть.
+    /// Завершающий слэш срезается: <c>dir/file/</c> и <c>dir/file</c> обозначают
+    /// один и тот же файл, и в манифесте они должны совпасть.
     /// </summary>
     [Theory]
-    [InlineData("/file.txt", "file.txt")]
     [InlineData("dir/file.txt/", "dir/file.txt")]
-    [InlineData("/dir/file.txt/", "dir/file.txt")]
-    public void TryCreate_КрайниеСлэши_Срезаются(string input, string expected)
+    [InlineData("file.txt//", "file.txt")]
+    public void TryCreate_TrailingSlash_Trimmed(string input, string expected)
     {
         var ok = RelativePath.TryCreate(input, out var result, out _);
 
         Assert.True(ok);
         Assert.Equal(expected, result!.Value);
+    }
+
+    /// <summary>
+    /// Абсолютный путь отвергается, а не превращается в относительный.
+    /// Срезать ведущий слэш молча — значит подменить присланное клиентом
+    /// другим значением и скрыть ошибку в его скрипте.
+    /// </summary>
+    [Theory]
+    [InlineData("/file.txt")]
+    [InlineData("/etc/passwd")]
+    [InlineData("/home/data/a.bin")]
+    public void TryCreate_AbsolutePath_Rejected(string path)
+    {
+        var ok = RelativePath.TryCreate(path, out var result, out var error);
+
+        Assert.False(ok);
+        Assert.Null(result);
+        Assert.Contains("относительным", error!, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -56,7 +73,7 @@ public class RelativePathTests
     [InlineData("..")]
     [InlineData("dir/./file")]
     [InlineData("dir//file")]
-    public void TryCreate_ТочкиИПустыеСегменты_Отвергаются(string path)
+    public void TryCreate_DotSegmentsOrEmptySegments_Rejected(string path)
     {
         var ok = RelativePath.TryCreate(path, out var result, out var error);
 
@@ -71,7 +88,7 @@ public class RelativePathTests
     /// обратный слэш, после чего разбор на стороне клиента разъезжается.
     /// </summary>
     [Fact]
-    public void TryCreate_ОбратныйСлэш_Отвергается()
+    public void TryCreate_BackslashInPath_Rejected()
     {
         var ok = RelativePath.TryCreate(@"dir\file.txt", out _, out var error);
 
@@ -88,7 +105,7 @@ public class RelativePathTests
     [InlineData("dir/file\rname.txt")]
     [InlineData("dir/file\tname.txt")]
     [InlineData("dir/file\0name.txt")]
-    public void TryCreate_УправляющиеСимволы_Отвергаются(string path)
+    public void TryCreate_ControlCharacters_Rejected(string path)
     {
         var ok = RelativePath.TryCreate(path, out _, out var error);
 
@@ -101,9 +118,7 @@ public class RelativePathTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    [InlineData("/")]
-    [InlineData("///")]
-    public void TryCreate_ПустойПуть_Отвергается(string? path)
+    public void TryCreate_EmptyPath_Rejected(string? path)
     {
         var ok = RelativePath.TryCreate(path, out _, out var error);
 
@@ -116,7 +131,7 @@ public class RelativePathTests
     /// сообщение попадает в журнал, и по нему должно быть понятно, что не так.
     /// </summary>
     [Fact]
-    public void Create_НедопустимыйПуть_БросаетИсключениеСПричиной()
+    public void Create_InvalidPath_ThrowsWithReason()
     {
         var exception = Assert.Throws<ArgumentException>(() => RelativePath.Create("../secret"));
 
@@ -125,7 +140,7 @@ public class RelativePathTests
 
     /// <summary>Допустимый путь метод <c>Create</c> возвращает без исключения.</summary>
     [Fact]
-    public void Create_ДопустимыйПуть_ВозвращаетЗначение()
+    public void Create_ValidPath_ReturnsValue()
     {
         var path = RelativePath.Create("dir/file.txt");
 
@@ -134,9 +149,9 @@ public class RelativePathTests
 
     /// <summary>Неявное приведение к строке даёт нормализованное значение.</summary>
     [Fact]
-    public void НеявноеПриведение_ДаётНормализованнуюСтроку()
+    public void ImplicitStringConversion_ReturnsNormalizedValue()
     {
-        string value = RelativePath.Create("/dir/file.txt/");
+        string value = RelativePath.Create("dir/file.txt/");
 
         Assert.Equal("dir/file.txt", value);
     }
@@ -146,10 +161,10 @@ public class RelativePathTests
     /// нормализующихся одинаково, должны считаться равными.
     /// </summary>
     [Fact]
-    public void Равенство_СравниваетсяПоНормализованномуЗначению()
+    public void Equality_ComparesNormalizedValue()
     {
         var first = RelativePath.Create("dir/file.txt");
-        var second = RelativePath.Create("/dir/file.txt/");
+        var second = RelativePath.Create("dir/file.txt/");
 
         Assert.Equal(first, second);
         Assert.Equal(first.GetHashCode(), second.GetHashCode());
@@ -161,7 +176,7 @@ public class RelativePathTests
     /// потерять один из них.
     /// </summary>
     [Fact]
-    public void TryCreate_РегистрСохраняется()
+    public void TryCreate_CasePreserved()
     {
         RelativePath.TryCreate("Doc.txt", out var upper, out _);
         RelativePath.TryCreate("doc.txt", out var lower, out _);

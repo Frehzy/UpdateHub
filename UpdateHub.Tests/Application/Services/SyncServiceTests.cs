@@ -62,7 +62,7 @@ public class SyncServiceTests : IDisposable
     /// планового запуска скрипта, и он должен быть дешёвым.
     /// </summary>
     [Fact]
-    public async Task BuildPlanAsync_МанифестыСовпадают_КачатьНечего()
+    public async Task BuildPlanAsync_ManifestsMatch_NothingToDownload()
     {
         await AddServerFileAsync("a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111");
 
@@ -79,7 +79,7 @@ public class SyncServiceTests : IDisposable
 
     /// <summary>Отсутствующий у клиента файл попадает в план.</summary>
     [Fact]
-    public async Task BuildPlanAsync_ФайлаНетУКлиента_ПопадаетВПлан()
+    public async Task BuildPlanAsync_FileMissingOnClient_IncludedInPlan()
     {
         await AddServerFileAsync("a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111", size: 512);
 
@@ -94,7 +94,7 @@ public class SyncServiceTests : IDisposable
 
     /// <summary>Различие сумм означает изменённый файл; прежняя сумма сохраняется для журнала.</summary>
     [Fact]
-    public async Task BuildPlanAsync_СуммыРазличаются_ФайлПопадаетВПланСПрежнейСуммой()
+    public async Task BuildPlanAsync_HashesDiffer_IncludedWithPreviousHash()
     {
         await AddServerFileAsync("a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111");
 
@@ -114,7 +114,7 @@ public class SyncServiceTests : IDisposable
     /// в лишнюю передачу.
     /// </summary>
     [Fact]
-    public async Task BuildPlanAsync_СуммаВВерхнемРегистре_СчитаетсяСовпадающей()
+    public async Task BuildPlanAsync_UpperCaseClientHash_TreatedAsMatch()
     {
         await AddServerFileAsync("a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111");
 
@@ -132,7 +132,7 @@ public class SyncServiceTests : IDisposable
     /// отмонтировать каталог раздачи, чтобы приказать всем стереть свои данные.
     /// </summary>
     [Fact]
-    public async Task BuildPlanAsync_ЛишнийФайлУКлиента_ТолькоОтмечается()
+    public async Task BuildPlanAsync_ExtraFileOnClient_OnlyReported()
     {
         await AddServerFileAsync("a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111");
 
@@ -149,7 +149,7 @@ public class SyncServiceTests : IDisposable
 
     /// <summary>Пустой манифест сервера означает пустой план, а не команду на удаление.</summary>
     [Fact]
-    public async Task BuildPlanAsync_ПустойМанифестСервера_НеТребуетНичегоКачать()
+    public async Task BuildPlanAsync_EmptyServerManifest_NothingToDownload()
     {
         var plan = await _service.BuildPlanAsync(CreateRequest(new()
         {
@@ -161,9 +161,12 @@ public class SyncServiceTests : IDisposable
         Assert.Single(plan.ExtraFiles);
     }
 
-    /// <summary>Суммарный объём считается по файлам к скачиванию — по нему клиент проверяет место на диске.</summary>
+    /// <summary>
+    /// Суммарный объём считается по файлам к скачиванию — по нему клиент
+    /// проверяет, хватит ли места на диске.
+    /// </summary>
     [Fact]
-    public async Task BuildPlanAsync_СуммарныйОбъём_СчитаетсяПоФайламКСкачиванию()
+    public async Task BuildPlanAsync_TotalSize_CountsOnlyFilesToDownload()
     {
         await AddServerFileAsync("a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111", size: 1000);
         await AddServerFileAsync("b.iso", "bbbb2222bbbb2222bbbb2222bbbb2222", size: 6_000_000_000);
@@ -183,7 +186,7 @@ public class SyncServiceTests : IDisposable
     /// иначе один и тот же запрос давал бы разный ответ.
     /// </summary>
     [Fact]
-    public async Task BuildPlanAsync_ФайлыУпорядоченыПоПути()
+    public async Task BuildPlanAsync_FilesOrderedByPath()
     {
         await AddServerFileAsync("я.txt", "aaaa1111aaaa1111aaaa1111aaaa1111");
         await AddServerFileAsync("a.txt", "bbbb2222bbbb2222bbbb2222bbbb2222");
@@ -197,7 +200,7 @@ public class SyncServiceTests : IDisposable
 
     /// <summary>В плане передаётся текущее поколение манифеста.</summary>
     [Fact]
-    public async Task BuildPlanAsync_ПланСодержитПоколениеМанифеста()
+    public async Task BuildPlanAsync_PlanCarriesManifestGeneration()
     {
         _state.CompleteScan(entryCount: 1, totalSizeBytes: 1, rejectedPaths: [], hasChanges: true);
 
@@ -207,5 +210,9 @@ public class SyncServiceTests : IDisposable
     }
 
     /// <summary>Освобождает базу.</summary>
-    public void Dispose() => _database.Dispose();
+    public void Dispose()
+    {
+        _database.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

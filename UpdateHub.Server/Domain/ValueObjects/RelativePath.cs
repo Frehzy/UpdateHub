@@ -51,7 +51,16 @@ public sealed partial record RelativePath
             return false;
         }
 
-        var normalized = path.Trim('/');
+        // Абсолютный путь отвергается, а не превращается в относительный
+        // отбрасыванием ведущего слэша: срезать его молча — значит подменить
+        // присланное клиентом другим значением и скрыть ошибку в его скрипте.
+        if (path[0] == '/')
+        {
+            error = "путь должен быть относительным";
+            return false;
+        }
+
+        var normalized = path.TrimEnd('/');
         if (normalized.Length == 0)
         {
             error = "путь пуст после нормализации";

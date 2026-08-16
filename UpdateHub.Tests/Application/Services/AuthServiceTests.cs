@@ -95,14 +95,23 @@ public class AuthServiceTests : IDisposable
     /// <param name="isBlocked">Признак блокировки.</param>
     private async Task AddClientAsync(string clientId, string? userId = null, bool isBlocked = false)
     {
-        _database.Context.Clients.Add(new ClientEntity { Id = clientId, IsActive = true, IsBlocked = isBlocked });
+        _database.Context.Clients.Add(new ClientEntity
+        {
+            Id = clientId,
+            IsActive = true,
+            IsBlocked = isBlocked
+        });
+        await _database.Context.SaveChangesAsync();
 
         if (userId is not null)
         {
-            _database.Context.UserClientAccesses.Add(new UserClientAccessEntity { UserId = userId, ClientId = clientId });
+            _database.Context.UserClientAccesses.Add(new UserClientAccessEntity
+            {
+                UserId = userId,
+                ClientId = clientId
+            });
+            await _database.Context.SaveChangesAsync();
         }
-
-        await _database.Context.SaveChangesAsync();
     }
 
     /// <summary>
@@ -110,7 +119,7 @@ public class AuthServiceTests : IDisposable
     /// Без этого систему невозможно ввести в эксплуатацию.
     /// </summary>
     [Fact]
-    public async Task LoginAsync_АдминистраторНаЧистойБазе_ВходитБезКомпьютера()
+    public async Task LoginAsync_AdminOnEmptyDatabase_SignsInWithoutClient()
     {
         await AddUserAsync("admin", "adminparol", UserRole.Admin);
 
@@ -126,7 +135,7 @@ public class AuthServiceTests : IDisposable
     /// пользоваться им всё равно негде.
     /// </summary>
     [Fact]
-    public async Task LoginAsync_ПользовательБезПравБезКомпьютера_ПолучаетОтказ()
+    public async Task LoginAsync_UserWithoutGrantsAndWithoutClient_Rejected()
     {
         await AddUserAsync();
 
@@ -136,7 +145,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Пользователь с правами хотя бы на один компьютер входит в панель управления.</summary>
     [Fact]
-    public async Task LoginAsync_ПользовательСПравамиБезКомпьютера_Входит()
+    public async Task LoginAsync_UserWithGrantsAndWithoutClient_SignsIn()
     {
         var user = await AddUserAsync();
         await AddClientAsync("pc-1", user.Id);
@@ -149,7 +158,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Вход с указанием компьютера привязывает токен к нему.</summary>
     [Fact]
-    public async Task LoginAsync_СКомпьютером_ТокенПривязанКНему()
+    public async Task LoginAsync_WithClient_TokenBoundToClient()
     {
         var user = await AddUserAsync();
         await AddClientAsync("pc-1", user.Id);
@@ -162,7 +171,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Неверный пароль отклоняется.</summary>
     [Fact]
-    public async Task LoginAsync_НеверныйПароль_Отклоняется()
+    public async Task LoginAsync_WrongPassword_Rejected()
     {
         await AddUserAsync("admin", "adminparol", UserRole.Admin);
 
@@ -172,15 +181,15 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Неизвестный логин отклоняется тем же исключением, что и неверный пароль.</summary>
     [Fact]
-    public async Task LoginAsync_НеизвестныйЛогин_Отклоняется()
+    public async Task LoginAsync_UnknownUsername_Rejected()
     {
         await Assert.ThrowsAsync<AuthenticationFailedException>(
-            () => _service.LoginAsync("нет-такого", "любой", string.Empty, _connection));
+            () => _service.LoginAsync("нет-такого", "любой-пароль", string.Empty, _connection));
     }
 
     /// <summary>Отключённая учётная запись войти не может.</summary>
     [Fact]
-    public async Task LoginAsync_ОтключённаяУчётнаяЗапись_Отклоняется()
+    public async Task LoginAsync_DisabledAccount_Rejected()
     {
         await AddUserAsync("admin", "adminparol", UserRole.Admin, isActive: false);
 
@@ -193,7 +202,7 @@ public class AuthServiceTests : IDisposable
     /// Раньше запись создавалась до проверки прав и оставалась даже при отказе.
     /// </summary>
     [Fact]
-    public async Task LoginAsync_НеизвестныйКомпьютер_ОтклоняетсяИНеСоздаётЗапись()
+    public async Task LoginAsync_UnknownClient_RejectedAndNoRecordCreated()
     {
         await AddUserAsync("admin", "adminparol", UserRole.Admin);
 
@@ -206,7 +215,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Вход с заблокированного компьютера отклоняется.</summary>
     [Fact]
-    public async Task LoginAsync_ЗаблокированныйКомпьютер_Отклоняется()
+    public async Task LoginAsync_BlockedClient_Rejected()
     {
         var user = await AddUserAsync();
         await AddClientAsync("pc-1", user.Id, isBlocked: true);
@@ -217,7 +226,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>При входе сохраняется хэш refresh-токена, а не сам токен.</summary>
     [Fact]
-    public async Task LoginAsync_СохраняетХэшТокенаАНеСамТокен()
+    public async Task LoginAsync_StoresTokenHashNotToken()
     {
         await AddUserAsync("admin", "adminparol", UserRole.Admin);
 
@@ -232,7 +241,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Обновление выдаёт новую пару токенов.</summary>
     [Fact]
-    public async Task RefreshAsync_ДействующийТокен_ВыдаётНовуюПару()
+    public async Task RefreshAsync_ValidToken_IssuesNewPair()
     {
         await AddUserAsync("admin", "adminparol", UserRole.Admin);
         var login = await _service.LoginAsync("admin", "adminparol", string.Empty, _connection);
@@ -249,7 +258,7 @@ public class AuthServiceTests : IDisposable
     /// как им воспользовался законный владелец.
     /// </summary>
     [Fact]
-    public async Task RefreshAsync_ПрежнийТокен_ПерестаётДействовать()
+    public async Task RefreshAsync_PreviousToken_NoLongerValid()
     {
         await AddUserAsync("admin", "adminparol", UserRole.Admin);
         var login = await _service.LoginAsync("admin", "adminparol", string.Empty, _connection);
@@ -262,7 +271,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Неизвестный refresh-токен отклоняется.</summary>
     [Fact]
-    public async Task RefreshAsync_НеизвестныйТокен_Отклоняется()
+    public async Task RefreshAsync_UnknownToken_Rejected()
     {
         await Assert.ThrowsAsync<AuthenticationFailedException>(
             () => _service.RefreshAsync("выдуманный-токен", _connection));
@@ -270,7 +279,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>После выхода токен перестаёт действовать.</summary>
     [Fact]
-    public async Task LogoutAsync_ОтзываетТокен()
+    public async Task LogoutAsync_RevokesToken()
     {
         var user = await AddUserAsync("admin", "adminparol", UserRole.Admin);
         var login = await _service.LoginAsync("admin", "adminparol", string.Empty, _connection);
@@ -283,7 +292,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Чужой токен отозвать нельзя.</summary>
     [Fact]
-    public async Task LogoutAsync_ЧужойТокен_НеОтзывается()
+    public async Task LogoutAsync_TokenOfAnotherUser_NotRevoked()
     {
         await AddUserAsync("admin", "adminparol", UserRole.Admin);
         var login = await _service.LoginAsync("admin", "adminparol", string.Empty, _connection);
@@ -296,7 +305,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Смена пароля меняет пароль и снимает требование его сменить.</summary>
     [Fact]
-    public async Task ChangePasswordAsync_МеняетПарольИСнимаетТребование()
+    public async Task ChangePasswordAsync_ChangesPasswordAndClearsRequirement()
     {
         var user = await AddUserAsync("admin", "adminparol", UserRole.Admin);
         user.MustChangePassword = true;
@@ -316,7 +325,7 @@ public class AuthServiceTests : IDisposable
     /// иначе прежний токен продолжал бы действовать со старым паролем.
     /// </summary>
     [Fact]
-    public async Task ChangePasswordAsync_ОтзываетВыданныеТокены()
+    public async Task ChangePasswordAsync_RevokesIssuedTokens()
     {
         var user = await AddUserAsync("admin", "adminparol", UserRole.Admin);
         var login = await _service.LoginAsync("admin", "adminparol", string.Empty, _connection);
@@ -329,7 +338,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Неверный текущий пароль не позволяет сменить пароль.</summary>
     [Fact]
-    public async Task ChangePasswordAsync_НеверныйТекущийПароль_Отклоняется()
+    public async Task ChangePasswordAsync_WrongCurrentPassword_Rejected()
     {
         var user = await AddUserAsync("admin", "adminparol", UserRole.Admin);
 
@@ -339,7 +348,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Слишком короткий новый пароль отклоняется.</summary>
     [Fact]
-    public async Task ChangePasswordAsync_КороткийНовыйПароль_Отклоняется()
+    public async Task ChangePasswordAsync_NewPasswordTooShort_Rejected()
     {
         var user = await AddUserAsync("admin", "adminparol", UserRole.Admin);
 
@@ -349,7 +358,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Новый пароль обязан отличаться от текущего.</summary>
     [Fact]
-    public async Task ChangePasswordAsync_ТотЖеПароль_Отклоняется()
+    public async Task ChangePasswordAsync_SamePassword_Rejected()
     {
         var user = await AddUserAsync("admin", "adminparol", UserRole.Admin);
 
@@ -359,7 +368,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Новому пользователю выставляется требование сменить пароль.</summary>
     [Fact]
-    public async Task CreateUserAsync_НовыйПользователь_ОбязанСменитьПароль()
+    public async Task CreateUserAsync_NewUser_MustChangePassword()
     {
         var user = await _service.CreateUserAsync("petrov", "parol12345", UserRole.Client, null, null);
 
@@ -369,7 +378,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Занятый логин отклоняется.</summary>
     [Fact]
-    public async Task CreateUserAsync_ЗанятыйЛогин_Отклоняется()
+    public async Task CreateUserAsync_UsernameTaken_Rejected()
     {
         await AddUserAsync("petrov");
 
@@ -379,7 +388,7 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Права, указанные при создании, сразу записываются в базу.</summary>
     [Fact]
-    public async Task CreateUserAsync_ВыдаётУказанныеПрава()
+    public async Task CreateUserAsync_GrantsRequestedAccess()
     {
         await AddClientAsync("pc-1");
         _database.Context.Groups.Add(new GroupEntity { Id = "group-1", Name = "Бухгалтерия" });
@@ -395,12 +404,16 @@ public class AuthServiceTests : IDisposable
 
     /// <summary>Короткий пароль при создании отклоняется.</summary>
     [Fact]
-    public async Task CreateUserAsync_КороткийПароль_Отклоняется()
+    public async Task CreateUserAsync_PasswordTooShort_Rejected()
     {
         await Assert.ThrowsAsync<ArgumentException>(
             () => _service.CreateUserAsync("petrov", "korotk", UserRole.Client, null, null));
     }
 
     /// <summary>Освобождает базу.</summary>
-    public void Dispose() => _database.Dispose();
+    public void Dispose()
+    {
+        _database.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

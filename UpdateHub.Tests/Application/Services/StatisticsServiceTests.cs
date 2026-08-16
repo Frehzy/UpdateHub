@@ -41,6 +41,32 @@ public class StatisticsServiceTests : IDisposable
         await _database.Context.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Заводит запись эталонного манифеста и возвращает её идентификатор.
+    /// </summary>
+    /// <param name="path">Путь файла.</param>
+    /// <param name="md5">Контрольная сумма.</param>
+    /// <returns>Идентификатор записи манифеста.</returns>
+    /// <remarks>
+    /// Пофайловая детализация ссылается на запись манифеста внешним ключом,
+    /// поэтому выдуманный идентификатор в неё вставить нельзя.
+    /// </remarks>
+    private async Task<string> AddManifestEntryAsync(string path, string md5)
+    {
+        var entry = new ManifestEntryEntity
+        {
+            RelativePath = path,
+            Md5Hash = md5,
+            SizeBytes = 100,
+            LastModified = DateTime.UtcNow
+        };
+
+        _database.Context.ManifestEntries.Add(entry);
+        await _database.Context.SaveChangesAsync();
+
+        return entry.Id;
+    }
+
     /// <summary>Собирает запрос на сравнение.</summary>
     /// <param name="clientId">Идентификатор компьютера.</param>
     /// <param name="type">Тип обращения.</param>
@@ -60,7 +86,7 @@ public class StatisticsServiceTests : IDisposable
 
     /// <summary>Одно обращение создаёт ровно одну запись в журнале.</summary>
     [Fact]
-    public async Task LogSyncAsync_ОдноОбращение_СоздаётОднуЗапись()
+    public async Task LogSyncAsync_SingleRequest_CreatesOneRecord()
     {
         await AddClientAsync("pc-1");
 
@@ -72,7 +98,7 @@ public class StatisticsServiceTests : IDisposable
 
     /// <summary>В записи сохраняются компьютер, пользователь, тип и время ответа.</summary>
     [Fact]
-    public async Task LogSyncAsync_СохраняетПараметрыОбращения()
+    public async Task LogSyncAsync_StoresRequestDetails()
     {
         await AddClientAsync("pc-1");
 
@@ -89,12 +115,15 @@ public class StatisticsServiceTests : IDisposable
 
     /// <summary>Число файлов и суммарный объём берутся из плана.</summary>
     [Fact]
-    public async Task LogSyncAsync_СохраняетОбъёмВыдачи()
+    public async Task LogSyncAsync_StoresPayloadSize()
     {
         await AddClientAsync("pc-1");
+        var first = await AddManifestEntryAsync("a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111");
+        var second = await AddManifestEntryAsync("b.iso", "bbbb2222bbbb2222bbbb2222bbbb2222");
+
         var plan = CreatePlan(
-            new SyncFile("m1", "a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111", 1000, null),
-            new SyncFile("m2", "b.iso", "bbbb2222bbbb2222bbbb2222bbbb2222", 6_000_000_000, null));
+            new SyncFile(first, "a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111", 1000, null),
+            new SyncFile(second, "b.iso", "bbbb2222bbbb2222bbbb2222bbbb2222", 6_000_000_000, null));
 
         await _service.LogSyncAsync(plan, CreateRequest(), responseTimeMs: 5);
 
@@ -108,10 +137,13 @@ public class StatisticsServiceTests : IDisposable
 
     /// <summary>Пофайловая детализация сохраняется при подготовке к скачиванию.</summary>
     [Fact]
-    public async Task LogSyncAsync_ТипSync_СохраняетДетализацию()
+    public async Task LogSyncAsync_SyncType_StoresPerFileDetails()
     {
         await AddClientAsync("pc-1");
-        var plan = CreatePlan(new SyncFile("m1", "a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111", 100, "старая-сумма"));
+        var entryId = await AddManifestEntryAsync("a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111");
+
+        var plan = CreatePlan(
+            new SyncFile(entryId, "a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111", 100, "старая-сумма"));
 
         await _service.LogSyncAsync(plan, CreateRequest(type: RequestType.Sync), responseTimeMs: 5);
 
@@ -128,10 +160,12 @@ public class StatisticsServiceTests : IDisposable
     /// не собирался, и заполнять ею таблицу незачем.
     /// </summary>
     [Fact]
-    public async Task LogSyncAsync_ТипCheck_ДетализациюНеПишет()
+    public async Task LogSyncAsync_CheckType_SkipsPerFileDetails()
     {
         await AddClientAsync("pc-1");
-        var plan = CreatePlan(new SyncFile("m1", "a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111", 100, null));
+        var entryId = await AddManifestEntryAsync("a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111");
+
+        var plan = CreatePlan(new SyncFile(entryId, "a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111", 100, null));
 
         await _service.LogSyncAsync(plan, CreateRequest(type: RequestType.Check), responseTimeMs: 5);
 
@@ -141,7 +175,7 @@ public class StatisticsServiceTests : IDisposable
 
     /// <summary>Отпечаток манифеста клиента сохраняется для сопоставления обращений.</summary>
     [Fact]
-    public async Task LogSyncAsync_СохраняетОтпечатокМанифестаКлиента()
+    public async Task LogSyncAsync_StoresClientManifestFingerprint()
     {
         await AddClientAsync("pc-1");
         var request = new SyncRequest("pc-1", "ivanov", RequestType.Sync, new Dictionary<string, string>
@@ -157,7 +191,7 @@ public class StatisticsServiceTests : IDisposable
 
     /// <summary>Для пустого манифеста отпечаток пуст — считать нечего.</summary>
     [Fact]
-    public async Task LogSyncAsync_ПустойМанифест_ОтпечатокПуст()
+    public async Task LogSyncAsync_EmptyManifest_FingerprintIsEmpty()
     {
         await AddClientAsync("pc-1");
 
@@ -169,12 +203,14 @@ public class StatisticsServiceTests : IDisposable
 
     /// <summary>Сводка считает обращения, различные компьютеры и суммарный объём.</summary>
     [Fact]
-    public async Task GetStatisticsAsync_СчитаетОбращенияИКомпьютеры()
+    public async Task GetStatisticsAsync_CountsRequestsAndClients()
     {
         await AddClientAsync("pc-1");
         await AddClientAsync("pc-2");
+        var entryId = await AddManifestEntryAsync("a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111");
 
-        var plan = CreatePlan(new SyncFile("m1", "a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111", 500, null));
+        var plan = CreatePlan(new SyncFile(entryId, "a.txt", "aaaa1111aaaa1111aaaa1111aaaa1111", 500, null));
+
         await _service.LogSyncAsync(plan, CreateRequest("pc-1"), responseTimeMs: 1);
         await _service.LogSyncAsync(plan, CreateRequest("pc-1"), responseTimeMs: 1);
         await _service.LogSyncAsync(plan, CreateRequest("pc-2"), responseTimeMs: 1);
@@ -188,7 +224,7 @@ public class StatisticsServiceTests : IDisposable
 
     /// <summary>На пустой базе сводка возвращает нули, а не падает.</summary>
     [Fact]
-    public async Task GetStatisticsAsync_ПустаяБаза_ВозвращаетНули()
+    public async Task GetStatisticsAsync_EmptyDatabase_ReturnsZeros()
     {
         var stats = await _service.GetStatisticsAsync(days: null);
 
@@ -200,7 +236,7 @@ public class StatisticsServiceTests : IDisposable
 
     /// <summary>Ограничение по периоду отсекает старые обращения.</summary>
     [Fact]
-    public async Task GetStatisticsAsync_ОграничениеПериода_ОтсекаетСтарое()
+    public async Task GetStatisticsAsync_PeriodFilter_ExcludesOldRequests()
     {
         await AddClientAsync("pc-1");
         await _service.LogSyncAsync(CreatePlan(), CreateRequest(), responseTimeMs: 1);
@@ -219,7 +255,7 @@ public class StatisticsServiceTests : IDisposable
 
     /// <summary>Разбивка по дням группирует обращения по дате.</summary>
     [Fact]
-    public async Task GetStatisticsAsync_РазбивкаПоДням_ГруппируетПоДате()
+    public async Task GetStatisticsAsync_DailyBreakdown_GroupsByDate()
     {
         await AddClientAsync("pc-1");
         await _service.LogSyncAsync(CreatePlan(), CreateRequest(), responseTimeMs: 1);
@@ -232,5 +268,9 @@ public class StatisticsServiceTests : IDisposable
     }
 
     /// <summary>Освобождает базу.</summary>
-    public void Dispose() => _database.Dispose();
+    public void Dispose()
+    {
+        _database.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

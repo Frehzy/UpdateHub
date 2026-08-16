@@ -12,8 +12,8 @@ namespace UpdateHub.Tests.Infrastructure.Security;
 /// </summary>
 /// <remarks>
 /// Состав утверждений в токене здесь не формальность: по ним работает
-/// разграничение доступа. Роль читается из утверждения <c>role</c>,
-/// и ошибка в его имени открыла бы панель управления обычному пользователю.
+/// разграничение доступа. Роль читается из утверждения роли, и ошибка
+/// в его имени открыла бы панель управления обычному пользователю.
 /// </remarks>
 public class TokenGeneratorTests
 {
@@ -42,7 +42,7 @@ public class TokenGeneratorTests
 
     /// <summary>В токен попадают идентификатор, логин и роль пользователя.</summary>
     [Fact]
-    public void GenerateAccessToken_СодержитИдентификаторЛогинИРоль()
+    public void GenerateAccessToken_ContainsIdentifierLoginAndRole()
     {
         var generator = CreateGenerator();
         var token = generator.GenerateAccessToken(CreateUser(UserRole.Admin));
@@ -59,7 +59,7 @@ public class TokenGeneratorTests
     /// парная к предыдущей: важно, что роль не «прилипает» к администратору.
     /// </summary>
     [Fact]
-    public void GenerateAccessToken_ОбычныйПользователь_ПолучаетРольClient()
+    public void GenerateAccessToken_RegularUser_GetsClientRole()
     {
         var generator = CreateGenerator();
         var token = generator.GenerateAccessToken(CreateUser(UserRole.Client));
@@ -71,7 +71,7 @@ public class TokenGeneratorTests
 
     /// <summary>Издатель и получатель берутся из настроек.</summary>
     [Fact]
-    public void GenerateAccessToken_ИздательИПолучатель_ИзНастроек()
+    public void GenerateAccessToken_IssuerAndAudience_TakenFromSettings()
     {
         var generator = CreateGenerator();
         var token = generator.GenerateAccessToken(CreateUser());
@@ -87,7 +87,7 @@ public class TokenGeneratorTests
     /// Раньше он был захардкожен и расходился с конфигурацией.
     /// </summary>
     [Fact]
-    public void GenerateAccessToken_СрокЖизни_БерётсяИзНастроек()
+    public void GenerateAccessToken_Lifetime_TakenFromSettings()
     {
         var generator = CreateGenerator(accessMinutes: 15);
         var token = generator.GenerateAccessToken(CreateUser());
@@ -100,7 +100,7 @@ public class TokenGeneratorTests
 
     /// <summary>Свойства сроков жизни отражают настройки.</summary>
     [Fact]
-    public void СрокиЖизни_СоответствуютНастройкам()
+    public void TokenLifetimes_MatchSettings()
     {
         var generator = CreateGenerator(accessMinutes: 45, refreshDays: 10);
 
@@ -113,7 +113,7 @@ public class TokenGeneratorTests
     /// два токена, выданных одному пользователю в одну секунду.
     /// </summary>
     [Fact]
-    public void GenerateAccessToken_КаждыйВыпуск_ИмеетСвойИдентификатор()
+    public void GenerateAccessToken_EachIssue_HasUniqueTokenId()
     {
         var generator = CreateGenerator();
         var user = CreateUser();
@@ -128,7 +128,7 @@ public class TokenGeneratorTests
 
     /// <summary>Refresh-токены не повторяются.</summary>
     [Fact]
-    public void GenerateRefreshToken_ЗначенияНеПовторяются()
+    public void GenerateRefreshToken_ValuesAreUnique()
     {
         var generator = CreateGenerator();
 
@@ -142,7 +142,7 @@ public class TokenGeneratorTests
     /// и в теле формы: скрипт передаёт его через <c>curl -d</c>.
     /// </summary>
     [Fact]
-    public void GenerateRefreshToken_БезопасенДляПередачиВФорме()
+    public void GenerateRefreshToken_SafeForFormTransmission()
     {
         var generator = CreateGenerator();
 
@@ -155,7 +155,7 @@ public class TokenGeneratorTests
 
     /// <summary>Хэш одного и того же токена стабилен — по нему идёт поиск в базе.</summary>
     [Fact]
-    public void HashRefreshToken_ДляОдногоТокена_Стабилен()
+    public void HashRefreshToken_SameToken_ProducesStableHash()
     {
         var generator = CreateGenerator();
         var token = generator.GenerateRefreshToken();
@@ -165,7 +165,7 @@ public class TokenGeneratorTests
 
     /// <summary>Разные токены дают разные хэши.</summary>
     [Fact]
-    public void HashRefreshToken_РазныеТокены_ДаютРазныеХэши()
+    public void HashRefreshToken_DifferentTokens_ProduceDifferentHashes()
     {
         var generator = CreateGenerator();
 
@@ -180,7 +180,7 @@ public class TokenGeneratorTests
     /// утечка не должна позволять обновить access-токен.
     /// </summary>
     [Fact]
-    public void HashRefreshToken_ОтличаетсяОтИсходногоТокена()
+    public void HashRefreshToken_DiffersFromOriginalToken()
     {
         var generator = CreateGenerator();
         var token = generator.GenerateRefreshToken();

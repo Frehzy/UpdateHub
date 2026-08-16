@@ -16,7 +16,7 @@ public class ManifestStateTests
 {
     /// <summary>Первый вызов получает право на обход.</summary>
     [Fact]
-    public async Task TryBeginScanAsync_ПервыйВызов_ПолучаетПраво()
+    public async Task TryBeginScanAsync_FirstCall_GrantsScanRight()
     {
         var state = new ManifestState();
 
@@ -32,7 +32,7 @@ public class ManifestStateTests
     /// администратора: два обхода писали бы в таблицу с уникальным индексом.
     /// </summary>
     [Fact]
-    public async Task TryBeginScanAsync_ПоканемУдерживаетсяПраво_ВторойВызовОтказ()
+    public async Task TryBeginScanAsync_WhileRightIsHeld_SecondCallDenied()
     {
         var state = new ManifestState();
 
@@ -45,7 +45,7 @@ public class ManifestStateTests
 
     /// <summary>После освобождения право выдаётся снова.</summary>
     [Fact]
-    public async Task TryBeginScanAsync_ПослеОсвобождения_ПравоВыдаётсяСнова()
+    public async Task TryBeginScanAsync_AfterRelease_GrantsRightAgain()
     {
         var state = new ManifestState();
 
@@ -60,7 +60,7 @@ public class ManifestStateTests
 
     /// <summary>После освобождения признак обхода снимается.</summary>
     [Fact]
-    public async Task Dispose_СнимаетПризнакОбхода()
+    public async Task Dispose_ClearsScanningFlag()
     {
         var state = new ManifestState();
 
@@ -78,7 +78,7 @@ public class ManifestStateTests
     /// и перестал бы что-либо означать.
     /// </summary>
     [Fact]
-    public void CompleteScan_БезИзменений_ПоколениеНеРастёт()
+    public void CompleteScan_WithoutChanges_GenerationUnchanged()
     {
         var state = new ManifestState();
         var before = state.Generation;
@@ -90,7 +90,7 @@ public class ManifestStateTests
 
     /// <summary>При обнаруженных изменениях поколение увеличивается на единицу.</summary>
     [Fact]
-    public void CompleteScan_СИзменениями_ПоколениеРастёт()
+    public void CompleteScan_WithChanges_GenerationIncremented()
     {
         var state = new ManifestState();
         var before = state.Generation;
@@ -102,7 +102,7 @@ public class ManifestStateTests
 
     /// <summary>Итоги обхода сохраняются и доступны для панели управления.</summary>
     [Fact]
-    public void CompleteScan_СохраняетИтогиОбхода()
+    public void CompleteScan_StoresScanResults()
     {
         var state = new ManifestState();
         string[] rejected = ["Doc.txt: конфликт регистра"];
@@ -120,7 +120,7 @@ public class ManifestStateTests
     /// при старте отличает «каталог пуст» от «обход ещё идёт».
     /// </summary>
     [Fact]
-    public void ДоПервогоОбхода_ОтметкаЗавершенияПуста()
+    public void BeforeFirstScan_CompletionTimestampIsNull()
     {
         var state = new ManifestState();
 
@@ -135,7 +135,7 @@ public class ManifestStateTests
     /// администратора, приходящие в произвольный момент.
     /// </summary>
     [Fact]
-    public async Task TryBeginScanAsync_ПриОдновременномОбращении_ПравоПолучаетОдин()
+    public async Task TryBeginScanAsync_ConcurrentCalls_OnlyOneSucceeds()
     {
         var state = new ManifestState();
 
