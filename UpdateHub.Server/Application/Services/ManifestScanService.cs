@@ -37,7 +37,7 @@ public class ManifestScanService(
             return ManifestScanResult.Skipped;
         }
 
-        var filesPath = Path.GetFullPath(_config.FilesPath);
+        var filesPath = _config.ResolvedFilesPath;
         if (!Directory.Exists(filesPath))
         {
             Directory.CreateDirectory(filesPath);
@@ -196,9 +196,21 @@ public class ManifestScanService(
                 rejected.Count, string.Join("; ", rejected.Take(5)));
         }
 
-        logger.LogInformation(
-            "Обход завершён: файлов {Count}, пересчитано MD5 {Hashed}, изменений {Changes}, поколение {Generation}",
-            seenPaths.Count, hashedCount, changes.Count, state.Generation);
+        // Обход выполняется каждые несколько десятков секунд и в обычной жизни
+        // ничего не находит. Писать об этом на уровне Information — значит утопить
+        // в однообразных строках всё, что действительно стоит прочитать.
+        if (hasChanges)
+        {
+            logger.LogInformation(
+                "Манифест обновлён: файлов {Count}, пересчитано MD5 {Hashed}, изменений {Changes}, поколение {Generation}",
+                seenPaths.Count, hashedCount, changes.Count, state.Generation);
+        }
+        else
+        {
+            logger.LogDebug(
+                "Обход завершён без изменений: файлов {Count}, поколение {Generation}",
+                seenPaths.Count, state.Generation);
+        }
 
         return new ManifestScanResult(true, seenPaths.Count, hashedCount, changes.Count, rejected);
     }

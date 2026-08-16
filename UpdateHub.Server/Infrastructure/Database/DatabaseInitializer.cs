@@ -48,7 +48,7 @@ public class DatabaseInitializer(
     /// </summary>
     private void EnsureDatabaseDirectoryExists()
     {
-        var directory = Path.GetDirectoryName(Path.GetFullPath(_config.DatabasePath));
+        var directory = Path.GetDirectoryName(_config.ResolvedDatabasePath);
         if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
         {
             Directory.CreateDirectory(directory);

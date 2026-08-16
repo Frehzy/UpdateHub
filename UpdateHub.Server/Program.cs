@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Reflection;
 using UpdateHub.Server.Api.V1.Mappers;
 using UpdateHub.Server.Infrastructure.Database;
+using UpdateHub.Server.Infrastructure.Diagnostics;
 using UpdateHub.Server.Infrastructure.Extensions;
 using UpdateHub.Server.Infrastructure.Middleware;
 
@@ -29,7 +30,6 @@ builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 // На канале 2 Мбит/с это заметно; клиенту достаточно флага curl --compressed.
 builder.Services.AddResponseCompression(options =>
 {
-    options.EnableForHttps = true;
     options.Providers.Add<GzipCompressionProvider>();
     options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(["text/plain"]);
 });
@@ -112,5 +112,8 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHealthChecks("/health").AllowAnonymous();
+
+// Сводка печатается после старта: до этого момента Kestrel ещё не назначил адреса.
+app.Lifetime.ApplicationStarted.Register(() => StartupSummary.Log(app));
 
 app.Run();

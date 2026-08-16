@@ -53,4 +53,37 @@ public class UpdateHubConfig
     /// Сколько суток хранить историю изменений файлов и клиентов.
     /// </summary>
     public int HistoryRetentionDays { get; set; } = 180;
+
+    /// <summary>Абсолютный путь к каталогу раздачи.</summary>
+    public string ResolvedFilesPath => Resolve(FilesPath);
+
+    /// <summary>Абсолютный путь к файлу базы данных.</summary>
+    public string ResolvedDatabasePath => Resolve(DatabasePath);
+
+    /// <summary>
+    /// Приводит путь из конфигурации к абсолютному виду.
+    /// </summary>
+    /// <param name="path">Путь: абсолютный либо относительный.</param>
+    /// <returns>Абсолютный путь.</returns>
+    /// <remarks>
+    /// Относительный путь разрешается от каталога с исполняемым файлом, а не от
+    /// текущего каталога процесса. Текущий каталог задаёт запускающая сторона:
+    /// Visual Studio ставит его в корень проекта, служба Windows — в
+    /// <c>C:\Windows\System32</c>, а <c>dotnet</c> из консоли — туда, откуда его
+    /// позвали. Из-за этого одна и та же настройка приводила бы к разным папкам
+    /// при разных способах запуска. Привязка к каталогу сборки делает поведение
+    /// одинаковым: файлы окажутся рядом с приложением, в <c>bin\Debug\net10.0</c>.
+    /// В Docker пути заданы абсолютными, поэтому там ничего не меняется.
+    /// </remarks>
+    public static string Resolve(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            path = ".";
+        }
+
+        return Path.IsPathRooted(path)
+            ? Path.GetFullPath(path)
+            : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, path));
+    }
 }

@@ -47,8 +47,8 @@ public static class ServiceCollectionExtensions
     /// <returns>Коллекция служб.</returns>
     public static IServiceCollection AddDatabase(this IServiceCollection services, IConfiguration configuration)
     {
-        var databasePath = configuration.GetValue<string>("UpdateHub:DatabasePath")
-                           ?? new UpdateHubConfig().DatabasePath;
+        var databasePath = UpdateHubConfig.Resolve(
+            configuration.GetValue<string>("UpdateHub:DatabasePath") ?? new UpdateHubConfig().DatabasePath);
 
         // Ожидание блокировки вместо мгновенной ошибки: при одновременном
         // обращении нескольких клиентов и работе сканера конкуренция за запись неизбежна.

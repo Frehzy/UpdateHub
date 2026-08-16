@@ -39,26 +39,31 @@ public class AuthController(
         var result = await authService.LoginAsync(
             request.Username,
             request.Password,
-            request.ClientId,
+            request.ClientId ?? string.Empty,
             Connection,
             cancellationToken);
 
-        // Сведения о железе обновляются после успешного входа: до проверки прав
-        // сервер не должен ничего записывать о неизвестном компьютере.
-        await clientService.RecordCheckInAsync(
-            request.ClientId,
-            new ClientReport(
-                request.Hostname,
-                request.HardwareFingerprint,
-                request.OsVersion,
-                request.KernelVersion,
-                request.Architecture,
-                request.CpuInfo,
-                request.MemoryGb,
-                request.DiskGb,
-                request.MacAddress),
-            Connection,
-            cancellationToken);
+        // Сведения о железе обновляются только после успешного входа и только
+        // когда компьютер указан: до проверки прав сервер не должен ничего
+        // записывать о неизвестном компьютере, а вход в панель управления
+        // выполняется вообще без привязки к машине.
+        if (!string.IsNullOrWhiteSpace(result.ClientId))
+        {
+            await clientService.RecordCheckInAsync(
+                result.ClientId,
+                new ClientReport(
+                    request.Hostname,
+                    request.HardwareFingerprint,
+                    request.OsVersion,
+                    request.KernelVersion,
+                    request.Architecture,
+                    request.CpuInfo,
+                    request.MemoryGb,
+                    request.DiskGb,
+                    request.MacAddress),
+                Connection,
+                cancellationToken);
+        }
 
         return TextPairs(
             ("access_token", result.AccessToken),

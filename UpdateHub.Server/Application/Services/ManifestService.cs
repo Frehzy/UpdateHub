@@ -50,7 +50,7 @@ public class ManifestService(
             return null;
         }
 
-        var root = Path.GetFullPath(_config.FilesPath);
+        var root = _config.ResolvedFilesPath;
         var fullPath = Path.GetFullPath(Path.Combine(root, entry.RelativePath));
 
         // Путь пришёл из базы, куда попадает только результат обхода каталога,
