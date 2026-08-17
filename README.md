@@ -66,7 +66,7 @@ Windows-папка ──проброс──► /app/files ──обход п�
 ## Структура проекта
 
 ```
-UpdateHub.Server/
+UpdateHub.BackendServer/
   Api/V1/Controllers      контроллеры; клиентские отдают текст, админский — JSON
   Api/V1/DTOs             формы клиентской части: вход, заявка, смена пароля
   Application/Manifest    формат md5sum и общее состояние манифеста
@@ -76,12 +76,12 @@ UpdateHub.Server/
   Domain/Entities         сущности базы данных
   Infrastructure          конфигурация, база, безопасность, диагностика
   Migrations              миграции схемы базы данных
-UpdateHub.Shared/         договор между сервером и панелью: запросы, ответы, перечисления
-UpdateHub.Admin/          панель управления, Blazor WebAssembly
-UpdateHub.Tests/          тесты xunit, повторяют структуру серверного проекта
-UpdateHub.Client/         клиент на bash для машин под Ubuntu
-UpdateHub.Admin.Tests/    тесты панели управления
-docs/                     списки проверок, которые нельзя выполнить тестами
+UpdateHub.Shared/          договор между сервером и панелью: запросы, ответы, перечисления
+UpdateHub.FrontendServer/  панель управления, Blazor WebAssembly
+UpdateHub.Backend.Tests/   тесты сервера
+UpdateHub.Frontend.Tests/  тесты панели управления
+UpdateHub.Client/          клиент на bash для машин под Ubuntu
+docs/                      списки проверок, которые нельзя выполнить тестами
 ```
 
 ## Клиент
@@ -105,7 +105,7 @@ updatehub sync                          # обновление
 ## Запуск для разработки
 
 ```
-dotnet run --project UpdateHub.Server
+dotnet run --project UpdateHub.BackendServer
 ```
 
 Профиль `http` слушает `http://localhost:5083` и открывает Swagger. Профиль
@@ -152,7 +152,7 @@ make logs
 Схема применяется миграциями. Следующую заводить так:
 
 ```
-dotnet ef migrations add <Название> --project UpdateHub.Server
+dotnet ef migrations add <Название> --project UpdateHub.BackendServer
 ```
 
 База, созданная прежней версией сервера без миграций, подхватывается при

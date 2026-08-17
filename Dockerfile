@@ -9,18 +9,18 @@ WORKDIR /src
 
 # Сначала только файлы проектов: пока они не менялись, docker берёт слой
 # с восстановленными пакетами из кэша, а не тянет их заново.
-COPY UpdateHub.Server/UpdateHub.Server.csproj UpdateHub.Server/
+COPY UpdateHub.BackendServer/UpdateHub.BackendServer.csproj UpdateHub.BackendServer/
 COPY UpdateHub.Shared/UpdateHub.Shared.csproj UpdateHub.Shared/
-COPY UpdateHub.Admin/UpdateHub.Admin.csproj UpdateHub.Admin/
-RUN dotnet restore UpdateHub.Server/UpdateHub.Server.csproj
+COPY UpdateHub.FrontendServer/UpdateHub.FrontendServer.csproj UpdateHub.FrontendServer/
+RUN dotnet restore UpdateHub.BackendServer/UpdateHub.BackendServer.csproj
 
-COPY UpdateHub.Server/ UpdateHub.Server/
+COPY UpdateHub.BackendServer/ UpdateHub.BackendServer/
 COPY UpdateHub.Shared/ UpdateHub.Shared/
-COPY UpdateHub.Admin/ UpdateHub.Admin/
+COPY UpdateHub.FrontendServer/ UpdateHub.FrontendServer/
 
 # Публикация сервера собирает и панель управления: она подключена ссылкой
 # на проект, и её файлы попадают в wwwroot.
-RUN dotnet publish UpdateHub.Server/UpdateHub.Server.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish UpdateHub.BackendServer/UpdateHub.BackendServer.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
@@ -48,4 +48,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
 
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "UpdateHub.Server.dll"]
+ENTRYPOINT ["dotnet", "UpdateHub.BackendServer.dll"]

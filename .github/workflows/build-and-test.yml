@@ -44,7 +44,7 @@ jobs:
           dotnet tool install --global dotnet-ef --version 10.0.11
           export PATH="$PATH:$HOME/.dotnet/tools"
           dotnet ef migrations has-pending-model-changes \
-            --project UpdateHub.Server \
+            --project UpdateHub.BackendServer \
             --no-build --configuration Release
 
   client:
