@@ -1,7 +1,11 @@
 <Solution>
-  <Project Path="UpdateHub.Admin/UpdateHub.Admin.csproj" />
-  <Project Path="UpdateHub.Admin.Tests/UpdateHub.Admin.Tests.csproj" />
-  <Project Path="UpdateHub.Server/UpdateHub.Server.csproj" />
+  <Folder Name="/BackendServer/">
+    <Project Path="UpdateHub.Server/UpdateHub.Server.csproj" />
+    <Project Path="UpdateHub.Tests/UpdateHub.Tests.csproj" Id="7f3029b8-ad8a-4973-8eb7-30950425b1ed" />
+  </Folder>
+  <Folder Name="/FrontendServer/">
+    <Project Path="UpdateHub.Admin.Tests/UpdateHub.Admin.Tests.csproj" />
+    <Project Path="UpdateHub.Admin/UpdateHub.Admin.csproj" />
+  </Folder>
   <Project Path="UpdateHub.Shared/UpdateHub.Shared.csproj" />
-  <Project Path="UpdateHub.Tests/UpdateHub.Tests.csproj" Id="7f3029b8-ad8a-4973-8eb7-30950425b1ed" />
 </Solution>
