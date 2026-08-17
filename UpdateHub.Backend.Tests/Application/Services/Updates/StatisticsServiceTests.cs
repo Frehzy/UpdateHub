@@ -1,11 +1,14 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using UpdateHub.Backend.Tests.TestSupport;
+using UpdateHub.BackendServer.Application.Repositories.Clients;
 using UpdateHub.BackendServer.Application.Repositories.Updates;
 using UpdateHub.BackendServer.Application.Services.Updates;
 using UpdateHub.BackendServer.Application.Sync;
 using UpdateHub.BackendServer.Domain.Entities.Clients;
 using UpdateHub.BackendServer.Domain.Entities.Manifest;
 using UpdateHub.BackendServer.Domain.Enums;
+using UpdateHub.BackendServer.Infrastructure.Configuration;
 
 namespace UpdateHub.Backend.Tests.Application.Services.Updates;
 
@@ -31,6 +34,8 @@ public class StatisticsServiceTests : IDisposable
         _service = new StatisticsService(
             new UpdateRequestRepository(_database.Context),
             new UpdateDetailRepository(_database.Context),
+            new ClientRepository(_database.Context),
+            Options.Create(new UpdateHubConfig()),
             NullLogger<StatisticsService>.Instance);
     }
 
