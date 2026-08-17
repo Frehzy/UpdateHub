@@ -1,5 +1,6 @@
 using System.Net;
 using UpdateHub.Frontend.Tests.TestSupport;
+using UpdateHub.FrontendServer.Services;
 using UpdateHub.Shared.Contracts.Groups;
 using UpdateHub.Shared.Contracts.Users;
 using UpdateHub.Shared.Enums;

@@ -1,5 +1,6 @@
 using UpdateHub.BackendServer.Application.Sync;
 using UpdateHub.BackendServer.Domain.Entities.Updates;
+using UpdateHub.Shared.Contracts.Clients;
 using UpdateHub.Shared.Contracts.Statistics;
 
 namespace UpdateHub.BackendServer.Application.Abstractions.Services.Updates;
@@ -14,6 +15,19 @@ public interface IStatisticsService
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Сводка.</returns>
     Task<StatsResponseDto> GetStatisticsAsync(int? days, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Возвращает компьютеры, не обращавшиеся дольше заданного срока.
+    /// </summary>
+    /// <param name="days">Порог в сутках; <c>null</c> — значение из настроек.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список компьютеров, начиная с самых давних.</returns>
+    /// <remarks>
+    /// Компьютеры, не обращавшиеся ни разу, попадают в список всегда и идут
+    /// первыми: заведён администратором, но скрипт на нём так и не заработал —
+    /// худший случай из возможных.
+    /// </remarks>
+    Task<StaleClientListResponseDto> GetStaleClientsAsync(int? days, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Записывает обращение клиента вместе с пофайловой детализацией.

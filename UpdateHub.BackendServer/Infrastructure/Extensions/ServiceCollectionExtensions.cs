@@ -134,6 +134,11 @@ public static class ServiceCollectionExtensions
 
         services.AddHostedService<ManifestScanBackgroundService>();
         services.AddHostedService<CleanupBackgroundService>();
+        // Служба копий заводится единственным экземпляром и уже он
+        // отдаётся фоновой задаче: администратор снимает копию кнопкой,
+        // не дожидаясь расписания, и это должна быть та же служба.
+        services.AddSingleton<BackupBackgroundService>();
+        services.AddHostedService(provider => provider.GetRequiredService<BackupBackgroundService>());
 
         return services;
     }

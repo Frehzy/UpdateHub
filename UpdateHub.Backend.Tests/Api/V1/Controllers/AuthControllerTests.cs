@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Net.Http.Headers;
+using System.Net;
+using UpdateHub.Backend.Tests.TestSupport;
 using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.Shared.Enums;
 

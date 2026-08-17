@@ -65,4 +65,16 @@ public class UpdateRequestRepository(AppDbContext context)
     /// <returns>Запрос с наложенным фильтром.</returns>
     private IQueryable<UpdateRequestEntity> Filtered(DateTime? from)
         => from.HasValue ? Set.Where(x => x.RequestTimestamp >= from.Value) : Set;
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<string, DateTime>> GetLastRequestPerClientAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var rows = await Set
+            .GroupBy(request => request.ClientId)
+            .Select(group => new { ClientId = group.Key, LastAt = group.Max(r => r.RequestTimestamp) })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(row => row.ClientId, row => row.LastAt, StringComparer.Ordinal);
+    }
 }

@@ -36,7 +36,7 @@ COPY --from=build /app/publish .
 # Каталоги создаются здесь, но при запуске поверх них монтируются том и папка
 # Windows, поэтому фактические права приходят с хоста. Контейнер запускается
 # от uid 1000 — см. параметр --user в Makefile.
-RUN mkdir -p /app/files /app/data && chown -R 1000:1000 /app
+RUN mkdir -p /app/files /app/data /app/backup && chown -R 1000:1000 /app
 
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:8080

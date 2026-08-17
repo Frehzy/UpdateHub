@@ -1,6 +1,8 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json.Serialization;
+using System.Text.Json;
 using UpdateHub.Shared.Contracts.Common;
 
 namespace UpdateHub.FrontendServer.Services;

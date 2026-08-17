@@ -1,5 +1,8 @@
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
+using System.Text;
+using UpdateHub.Backend.Tests.TestSupport;
 using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.Shared.Enums;
 
@@ -365,6 +368,118 @@ public class AdminControllerTests(UpdateHubApplication application)
         ]));
 
         Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
+    }
+
+
+    /// <summary>
+    /// Компьютер, ни разу не выходивший на связь, попадает в список молчащих.
+    /// </summary>
+    /// <remarks>
+    /// Худший случай из возможных: администратор завёл машину, а скрипт на ней
+    /// так и не заработал. Сводка обращений об этом не скажет — она показывает
+    /// итог по всем, и одна молчащая машина в нём незаметна.
+    /// </remarks>
+    [Fact]
+    public async Task StaleClients_ClientThatNeverReported_Listed()
+    {
+        using var client = await application.CreateAdminClientAsync();
+        var clientId = $"pc-molchit-{Guid.NewGuid():N}";
+
+        await client.PostAsJsonAsync("/api/v1/admin/clients", new { clientId });
+
+        var response = await client.GetAsync("/api/v1/admin/clients/stale");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var listed = payload.GetProperty("clients").EnumerateArray()
+            .FirstOrDefault(item => item.GetProperty("clientId").GetString() == clientId);
+
+        Assert.Equal(JsonValueKind.Object, listed.ValueKind);
+        Assert.Equal(JsonValueKind.Null, listed.GetProperty("lastRequestAt").ValueKind);
+    }
+
+    /// <summary>
+    /// Компьютер, обратившийся только что, в списке молчащих не появляется.
+    /// </summary>
+    [Fact]
+    public async Task StaleClients_RecentlyReportedClient_NotListed()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var user = await application.AddUserAsync($"svezhiy-{suffix}", "parol12345");
+        var clientId = $"pc-svezhiy-{suffix}";
+        await application.AddClientAsync(clientId, user.Id);
+
+        using var owner = await application.CreateAuthorizedClientAsync($"svezhiy-{suffix}", "parol12345");
+        await owner.PostAsync(
+            $"/api/v1/sync/diff?client_id={clientId}",
+            new StringContent(string.Empty, Encoding.UTF8, "text/plain"));
+
+        using var admin = await application.CreateAdminClientAsync();
+        var response = await admin.GetAsync("/api/v1/admin/clients/stale");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.DoesNotContain(
+            payload.GetProperty("clients").EnumerateArray(),
+            item => item.GetProperty("clientId").GetString() == clientId);
+    }
+
+    /// <summary>Порог берётся из запроса, если он указан.</summary>
+    [Fact]
+    public async Task StaleClients_ThresholdTakenFromQuery()
+    {
+        using var client = await application.CreateAdminClientAsync();
+
+        var response = await client.GetAsync("/api/v1/admin/clients/stale?days=30");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(30, payload.GetProperty("thresholdDays").GetInt32());
+    }
+
+    /// <summary>
+    /// Адрес списка молчащих не перехватывается адресом одного компьютера.
+    /// </summary>
+    /// <remarks>
+    /// Оба начинаются с /clients: «stale» могло бы попасть в параметр
+    /// идентификатора и превратиться в поиск несуществующего компьютера.
+    /// </remarks>
+    [Fact]
+    public async Task StaleClients_RouteNotShadowedByClientLookup()
+    {
+        using var client = await application.CreateAdminClientAsync();
+
+        var response = await client.GetAsync("/api/v1/admin/clients/stale");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Резервная копия снимается по требованию и пригодна для чтения.
+    /// </summary>
+    [Fact]
+    public async Task Backup_CreatedOnDemand()
+    {
+        using var client = await application.CreateAdminClientAsync();
+
+        var response = await client.PostAsync("/api/v1/admin/backup", content: null);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(payload.GetProperty("created").GetBoolean());
+        Assert.True(payload.GetProperty("sizeBytes").GetInt64() > 0);
+        Assert.True(File.Exists(payload.GetProperty("path").GetString()));
+    }
+
+    /// <summary>Снятие копии обычному пользователю недоступно.</summary>
+    [Fact]
+    public async Task Backup_OrdinaryUser_Forbidden()
+    {
+        using var client = await CreateOrdinaryUserClientAsync();
+
+        var response = await client.PostAsync("/api/v1/admin/backup", content: null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     /// <summary>Состояние манифеста доступно администратору.</summary>

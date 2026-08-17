@@ -31,12 +31,16 @@ public interface IUpdateRequestRepository : IRepository<UpdateRequestEntity, int
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Число удалённых записей.</returns>
     Task<int> DeleteOlderThanAsync(DateTime cutoff, CancellationToken cancellationToken = default);
-}
 
-/// <summary>
-/// Сводная статистика обращений.
-/// </summary>
-/// <param name="TotalRequests">Общее число обращений.</param>
-/// <param name="UniqueClients">Число различных компьютеров.</param>
-/// <param name="TotalBytes">Суммарный объём файлов, предложенных к скачиванию.</param>
-public sealed record RequestSummary(int TotalRequests, int UniqueClients, long TotalBytes);
+    /// <summary>
+    /// Возвращает время последнего обращения по каждому компьютеру.
+    /// </summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Соответствие «идентификатор компьютера — время последнего обращения».</returns>
+    /// <remarks>
+    /// Одним запросом на всех: спрашивать журнал по каждому компьютеру
+    /// отдельно означало бы столько обращений к базе, сколько машин.
+    /// </remarks>
+    Task<IReadOnlyDictionary<string, DateTime>> GetLastRequestPerClientAsync(
+        CancellationToken cancellationToken = default);
+}

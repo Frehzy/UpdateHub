@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore;
 
 namespace UpdateHub.BackendServer.Infrastructure.Database;
 

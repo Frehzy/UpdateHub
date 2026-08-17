@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.OpenApi;
 using System.IO.Compression;
 using System.Reflection;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using UpdateHub.BackendServer.Api.V1.Mappers;
 using UpdateHub.BackendServer.Infrastructure.Database;
 using UpdateHub.BackendServer.Infrastructure.Diagnostics;
@@ -30,6 +32,40 @@ builder.Services.AddAutoMapper(options => options.AddProfile<MappingProfile>());
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
+
+// Ограничение частоты попыток входа. Периметр закрыт межсетевым экраном
+// и криптомаршрутизатором, но не от того, кто уже находится в сети:
+// перебор пароля изнутри ничем не мешало бы вести часами.
+//
+// Счёт ведётся по адресу обратившегося, а не по логину: иначе перебор шёл бы
+// по разным логинам с одной машины, обходя ограничение, а заодно чужие
+// попытки блокировали бы вход настоящему владельцу учётной записи.
+builder.Services.AddRateLimiter(options =>
+{
+    var attempts = builder.Configuration.GetValue("UpdateHub:LoginAttemptsPerMinute", 10);
+
+    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "неизвестный",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = attempts,
+            Window = TimeSpan.FromMinutes(1),
+
+            // Очередь не нужна: превышение — повод отказать сразу, а не
+            // держать соединение и создавать вид работающего входа.
+            QueueLimit = 0
+        }));
+
+    // Ответ текстом, как и всё в клиентской части: bash-скрипту нечем
+    // разбирать ни JSON, ни пустое тело.
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
+        await context.HttpContext.Response.WriteAsync(
+            "error=Слишком много попыток входа. Повторите через минуту\n", cancellationToken);
+    };
+});
 
 // Манифест и планы синхронизации — текст, который сжимается примерно в восемь раз.
 // На канале 2 Мбит/с это заметно; клиенту достаточно флага curl --compressed.
@@ -118,6 +154,7 @@ app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
