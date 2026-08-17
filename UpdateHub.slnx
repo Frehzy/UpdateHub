@@ -1,7 +1,7 @@
 <Solution>
   <Folder Name="/BackendServer/">
-    <Project Path="UpdateHub.BackendServer/UpdateHub.BackendServer.csproj" />
     <Project Path="UpdateHub.Backend.Tests/UpdateHub.Backend.Tests.csproj" Id="7f3029b8-ad8a-4973-8eb7-30950425b1ed" />
+    <Project Path="UpdateHub.BackendServer/UpdateHub.BackendServer.csproj" />
   </Folder>
   <Folder Name="/FrontendServer/">
     <Project Path="UpdateHub.Frontend.Tests/UpdateHub.Frontend.Tests.csproj" />
