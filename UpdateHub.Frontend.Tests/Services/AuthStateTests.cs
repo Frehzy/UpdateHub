@@ -1,6 +1,6 @@
 using System.Net;
-using UpdateHub.FrontendServer.Services;
 using UpdateHub.Frontend.Tests.TestSupport;
+using UpdateHub.FrontendServer.Services;
 
 namespace UpdateHub.Frontend.Tests.Services;
 

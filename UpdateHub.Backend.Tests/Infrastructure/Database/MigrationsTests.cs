@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using UpdateHub.BackendServer.Application.Repositories;
 using UpdateHub.BackendServer.Domain.Entities;
-using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 using UpdateHub.BackendServer.Infrastructure.Database;
 using UpdateHub.BackendServer.Infrastructure.Security;

@@ -1,11 +1,10 @@
+using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using AutoMapper;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Application.Abstractions.Services;
 using UpdateHub.BackendServer.Application.Manifest;
 using UpdateHub.BackendServer.Application.Sync;
-using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.Shared.Contracts;
 using UpdateHub.Shared.Enums;
 

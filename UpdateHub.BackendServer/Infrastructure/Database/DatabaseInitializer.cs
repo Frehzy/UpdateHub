@@ -6,7 +6,6 @@ using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Domain.Entities;
-using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 using UpdateHub.BackendServer.Infrastructure.Security;
 using UpdateHub.Shared.Enums;

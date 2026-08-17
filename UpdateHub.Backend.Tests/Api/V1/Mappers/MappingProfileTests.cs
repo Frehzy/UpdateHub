@@ -1,8 +1,7 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using AutoMapper;
+using Microsoft.Extensions.Logging.Abstractions;
 using UpdateHub.BackendServer.Api.V1.Mappers;
 using UpdateHub.BackendServer.Domain.Entities;
-using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.Shared.Contracts;
 using UpdateHub.Shared.Enums;
 
