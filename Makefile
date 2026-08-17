@@ -29,6 +29,9 @@ FILES_DIR = $(CURDIR)/files
 # блокировки файлов через 9p/virtiofs работают неправильно и портят базу SQLite.
 DATA_VOLUME = updatehub-data
 
+# Журнал контейнера ограничен по размеру: драйвер json-file по умолчанию
+# растёт без предела, а сервер работает годами, и к нему не ходят.
+#
 # Ключ подписи токенов. Сгенерировать: openssl rand -base64 48
 JWT_SECRET ?=
 
@@ -66,6 +69,8 @@ run:
 		-e Jwt__SecretKey="$(JWT_SECRET)" \
 		-e UpdateHub__FilesPath=/app/files \
 		-e UpdateHub__DatabasePath=/app/data/updatehub.db \
+		--log-opt max-size=10m \
+		--log-opt max-file=5 \
 		--restart unless-stopped \
 		$(IMAGE_NAME)
 	@echo "Контейнер запущен на порту $(PORT)."

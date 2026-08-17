@@ -1,0 +1,89 @@
+# Сборка и тесты.
+#
+# Заведено потому, что проверять всё вручную перед каждым слиянием никто
+# не будет, а ошибка вида «забыли миграцию» или «опечатка в маршруте»
+# обнаруживается иначе только на сервере без интернета, куда нужно ехать.
+
+name: Сборка и тесты
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  dotnet:
+    name: Сервер и панель управления
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установка .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Восстановление пакетов
+        run: dotnet restore UpdateHub.slnx
+
+      - name: Сборка
+        run: dotnet build UpdateHub.slnx --configuration Release --no-restore
+
+      - name: Тесты
+        run: dotnet test UpdateHub.slnx --configuration Release --no-build --verbosity normal
+
+      # Модель и миграции обязаны совпадать. Расхождение обнаруживается иначе
+      # при первом же запросе на боевом сервере, причём в виде «no such column».
+      # Тест в наборе это тоже проверяет, но отдельный шаг называет причину
+      # прямо в списке шагов, а не в выводе одного из двух сотен тестов.
+      - name: Проверка миграций
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.11
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet ef migrations has-pending-model-changes \
+            --project UpdateHub.Server \
+            --no-build --configuration Release
+
+  client:
+    name: Клиент на bash
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Разбор синтаксиса
+        run: |
+          bash -n UpdateHub.Client/updatehub
+          bash -n UpdateHub.Client/install.sh
+          for file in UpdateHub.Client/lib/*.sh UpdateHub.Client/tests/*.sh; do
+            bash -n "$file"
+          done
+
+      - name: Статический разбор shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck --external-sources --shell=bash \
+            UpdateHub.Client/updatehub \
+            UpdateHub.Client/install.sh \
+            UpdateHub.Client/lib/*.sh \
+            UpdateHub.Client/tests/run-tests.sh
+
+      - name: Тесты клиента
+        run: ./UpdateHub.Client/tests/run-tests.sh
+
+  docker:
+    name: Сборка образа
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Образ собирается из корня репозитория: сервер ссылается на общую
+      # библиотеку и на панель управления, и из каталога сервера они не видны.
+      # Ошибка в контексте сборки обнаруживается только здесь.
+      - name: Сборка образа
+        run: docker build -t updatehub-server:ci .
