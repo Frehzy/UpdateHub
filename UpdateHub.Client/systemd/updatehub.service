@@ -1,0 +1,25 @@
+[Unit]
+Description=Обновление рабочей папки с сервера UpdateHub
+Documentation=file:/opt/updatehub/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/updatehub sync
+
+# Обновление идёт часами: шесть гигабайт по каналу 2 Мбит/с — это около семи
+# часов. Ограничение по времени снято, иначе systemd убил бы загрузку на
+# середине, и следующий запуск начал бы её заново.
+TimeoutStartSec=0
+
+# Права нужны на запись в рабочую папку, в /etc/updatehub и в /var/lib.
+User=root
+
+# Загрузка не должна мешать работе за машиной: у неё всего два гигабайта
+# памяти, и упор в диск заметен сразу.
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

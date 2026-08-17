@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+#
+# UpdateHub — обновление рабочей папки с сервера в закрытом контуре.
+#
+# Разбор JSON здесь отсутствует намеренно: сервер отвечает клиентской части
+# текстом в формате md5sum и строками «ключ=значение» именно для того, чтобы
+# на машине не требовался jq.
+#
+# Коды завершения различают причины отказа — их читает systemd и человек:
+#   0  успех
+#   1  ошибка использования или неизвестная неполадка
+#   75 временная неполадка: нет связи, мало места, обрыв загрузки
+#   77 отказано в доступе: неверный пароль или нет прав на компьютер
+#   78 ошибка настройки: компьютер не заведён, не заполнен файл настроек
+
+set -euo pipefail
+
+UH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=lib/common.sh
+. "$UH_ROOT/lib/common.sh"
+# shellcheck source=lib/config.sh
+. "$UH_ROOT/lib/config.sh"
+# shellcheck source=lib/identity.sh
+. "$UH_ROOT/lib/identity.sh"
+# shellcheck source=lib/http.sh
+. "$UH_ROOT/lib/http.sh"
+# shellcheck source=lib/auth.sh
+. "$UH_ROOT/lib/auth.sh"
+# shellcheck source=lib/manifest.sh
+. "$UH_ROOT/lib/manifest.sh"
+# shellcheck source=lib/download.sh
+. "$UH_ROOT/lib/download.sh"
+# shellcheck source=lib/commands.sh
+. "$UH_ROOT/lib/commands.sh"
+
+# Печатает подсказку по использованию.
+print_usage() {
+    cat <<'USAGE'
+UpdateHub — обновление рабочей папки с сервера.
+
+Использование: updatehub <команда> [аргументы]
+
+Команды:
+  enroll [примечание]   подать заявку на регистрацию компьютера
+  sync                  обновить рабочую папку
+  check                 показать разницу, ничего не меняя
+  status                показать состояние машины (без обращения к серверу)
+  seed <каталог>        начальная заливка со съёмного носителя
+  logout                отозвать сохранённые токены
+  selftest              проверить окружение, настройки и связь
+  help                  эта подсказка
+
+Ключи:
+  -c, --config <файл>   файл настроек (по умолчанию /etc/updatehub/updatehub.conf)
+  -v, --verbose         подробный вывод
+  -q, --quiet           только ошибки
+
+Порядок ввода машины в работу:
+  1. updatehub enroll
+  2. администратор одобряет заявку и выдаёт права
+  3. updatehub seed /media/usb/updatehub   (если есть носитель с файлами)
+  4. updatehub sync
+USAGE
+}
+
+# Выполняет команду под замком.
+#
+# Два одновременных обновления писали бы в один временный каталог и в одну
+# рабочую папку. Запуск по расписанию накладывается на ручной запуск легко:
+# обновление идёт часами, а таймер срабатывает ежедневно.
+run_locked() {
+    local lock_file="${STATE_DIR}/lock"
+    ensure_dir "$STATE_DIR"
+
+    exec {lock_descriptor}>"$lock_file" || die "Не удалось открыть файл замка: $lock_file"
+
+    if ! flock -n "$lock_descriptor"; then
+        UH_EXIT_CODE=75 die "Обновление уже выполняется другим процессом"
+    fi
+
+    "$@"
+}
+
+main() {
+    local command=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -c | --config)
+                [ $# -ge 2 ] || die "Ключ $1 требует значения"
+                UH_CONFIG_FILE="$2"
+                shift 2
+                ;;
+            -v | --verbose)
+                UH_VERBOSITY=2
+                shift
+                ;;
+            -q | --quiet)
+                UH_VERBOSITY=0
+                shift
+                ;;
+            -h | --help | help)
+                print_usage
+                return 0
+                ;;
+            -*)
+                die "Неизвестный ключ: $1"
+                ;;
+            *)
+                command="$1"
+                shift
+                break
+                ;;
+        esac
+    done
+
+    if [ -z "$command" ]; then
+        print_usage
+        return 1
+    fi
+
+    require_command curl "curl"
+    require_command md5sum "coreutils"
+    require_command flock "util-linux"
+
+    load_config
+    validate_config
+
+    case "$command" in
+        enroll) command_enroll "${1:-}" ;;
+        sync) run_locked run_sync "sync" ;;
+        check) run_sync "check" ;;
+        status) command_status ;;
+        seed) run_locked command_seed "${1:-}" ;;
+        logout) logout ;;
+        selftest) command_selftest ;;
+        *) die "Неизвестная команда: $command. Подсказка: updatehub help" ;;
+    esac
+}
+
+main "$@"
