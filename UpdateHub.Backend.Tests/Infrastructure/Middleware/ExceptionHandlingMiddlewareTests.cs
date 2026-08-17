@@ -1,7 +1,7 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
+using UpdateHub.BackendServer.Application.Services.Updates;
 using UpdateHub.BackendServer.Application.Sync;
 using UpdateHub.BackendServer.Infrastructure.Middleware;
 

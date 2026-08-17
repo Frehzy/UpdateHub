@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UpdateHub.BackendServer.Api.V1.DTOs.Request;
-using UpdateHub.BackendServer.Application.Abstractions.Services;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Clients;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Users;
 using UpdateHub.BackendServer.Application.Sync;
 
 namespace UpdateHub.BackendServer.Api.V1.Controllers;

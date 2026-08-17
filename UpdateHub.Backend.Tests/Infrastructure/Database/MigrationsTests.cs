@@ -1,9 +1,13 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using UpdateHub.BackendServer.Application.Repositories.Users;
 using UpdateHub.BackendServer.Application.Repositories;
-using UpdateHub.BackendServer.Domain.Entities;
+using UpdateHub.BackendServer.Domain.Entities.Users;
+using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 using UpdateHub.BackendServer.Infrastructure.Database;
 using UpdateHub.BackendServer.Infrastructure.Security;
@@ -62,6 +66,35 @@ public class MigrationsTests
         Assert.False(
             context.Database.HasPendingModelChanges(),
             "Модель изменилась без миграции. Выполните 'dotnet ef migrations add <Название>'");
+    }
+
+    /// <summary>
+    /// Снимок описывает сущности под теми же именами, что и текущая модель.
+    /// </summary>
+    /// <remarks>
+    /// Проверка появилась после переноса сущностей по подпапкам. Имена типов
+    /// записаны в снимке строками, и перенос их меняет. Сравнение схем такую
+    /// ошибку не ловит: имена таблиц берутся из <c>DbSet</c> и от пространства
+    /// имён не зависят, поэтому снимок с устаревшими именами построит те же
+    /// таблицы и пройдёт проверку. Обнаружилось бы это только при следующей
+    /// команде <c>dotnet ef migrations add</c> — готовым мусором в миграции.
+    /// </remarks>
+    [Fact]
+    public void ModelSnapshot_DescribesEntitiesUnderCurrentTypeNames()
+    {
+        using var connection = OpenConnection();
+        using var context = CreateContext(connection);
+
+        var current = context.Model.GetEntityTypes()
+            .Select(entity => entity.Name)
+            .OrderBy(name => name, StringComparer.Ordinal);
+
+        var snapshot = context.GetService<IMigrationsAssembly>().ModelSnapshot!.Model
+            .GetEntityTypes()
+            .Select(entity => entity.Name)
+            .OrderBy(name => name, StringComparer.Ordinal);
+
+        Assert.Equal(current, snapshot);
     }
 
     /// <summary>

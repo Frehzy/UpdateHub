@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Options;
-using UpdateHub.BackendServer.Application.Abstractions.Services;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Manifest;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 
 namespace UpdateHub.BackendServer.Application.BackgroundServices;

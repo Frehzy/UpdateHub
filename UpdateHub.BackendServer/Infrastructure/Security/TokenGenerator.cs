@@ -4,7 +4,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using UpdateHub.BackendServer.Domain.Entities;
+using UpdateHub.BackendServer.Domain.Entities.Users;
 
 namespace UpdateHub.BackendServer.Infrastructure.Security;
 

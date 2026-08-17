@@ -1,4 +1,8 @@
 using Microsoft.Extensions.Options;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Clients;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Manifest;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Updates;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Users;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 

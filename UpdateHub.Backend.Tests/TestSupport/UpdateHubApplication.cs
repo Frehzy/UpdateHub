@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Net.Http.Headers;
 using UpdateHub.BackendServer.Application.BackgroundServices;
-using UpdateHub.BackendServer.Domain.Entities;
+using UpdateHub.BackendServer.Domain.Entities.Clients;
+using UpdateHub.BackendServer.Domain.Entities.Users;
+using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.BackendServer.Infrastructure.Database;
 using UpdateHub.BackendServer.Infrastructure.Security;
 using UpdateHub.Shared.Enums;

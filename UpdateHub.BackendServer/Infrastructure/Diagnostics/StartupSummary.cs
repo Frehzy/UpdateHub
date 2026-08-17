@@ -1,7 +1,5 @@
-using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.Options;
-using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;

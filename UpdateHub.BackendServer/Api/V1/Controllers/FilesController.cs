@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
-using UpdateHub.BackendServer.Application.Abstractions.Services;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Clients;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Manifest;
 using UpdateHub.BackendServer.Application.Sync;
 
 namespace UpdateHub.BackendServer.Api.V1.Controllers;

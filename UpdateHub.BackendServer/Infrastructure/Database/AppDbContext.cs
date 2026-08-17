@@ -1,5 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using UpdateHub.BackendServer.Domain.Entities;
+using UpdateHub.BackendServer.Domain.Entities.Clients;
+using UpdateHub.BackendServer.Domain.Entities.Enrollments;
+using UpdateHub.BackendServer.Domain.Entities.Groups;
+using UpdateHub.BackendServer.Domain.Entities.Manifest;
+using UpdateHub.BackendServer.Domain.Entities.Updates;
+using UpdateHub.BackendServer.Domain.Entities.Users;
 
 namespace UpdateHub.BackendServer.Infrastructure.Database;
 
