@@ -1,8 +1,7 @@
-using UpdateHub.Server.Api.V1.DTOs.Request;
-using UpdateHub.Server.Api.V1.DTOs.Response;
 using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Domain.Enums;
+using UpdateHub.Shared.Contracts;
 
 namespace UpdateHub.Server.Application.Abstractions.Services;
 

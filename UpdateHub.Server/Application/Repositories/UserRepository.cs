@@ -3,6 +3,7 @@ using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Domain.Enums;
 using UpdateHub.Server.Infrastructure.Database;
+using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Server.Application.Repositories;
 

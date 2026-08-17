@@ -1,4 +1,4 @@
-namespace UpdateHub.Server.Api.V1.DTOs.Request;
+namespace UpdateHub.Shared.Contracts;
 
 /// <summary>Одобрение заявки на регистрацию компьютера.</summary>
 public class ApproveEnrollmentRequestDto

@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Enums;
+using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Server.Api.V1.Controllers;
 

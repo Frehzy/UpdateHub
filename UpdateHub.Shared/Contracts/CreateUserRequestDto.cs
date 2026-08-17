@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using UpdateHub.Server.Domain.Enums;
+using UpdateHub.Shared.Enums;
 
-namespace UpdateHub.Server.Api.V1.DTOs.Request;
+namespace UpdateHub.Shared.Contracts;
 
 /// <summary>Создание учётной записи администратором.</summary>
 public class CreateUserRequestDto

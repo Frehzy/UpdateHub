@@ -1,9 +1,10 @@
-using AutoMapper;
 using Microsoft.Extensions.Logging.Abstractions;
-using UpdateHub.Server.Api.V1.DTOs.Response;
+using AutoMapper;
 using UpdateHub.Server.Api.V1.Mappers;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Domain.Enums;
+using UpdateHub.Shared.Contracts;
+using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Tests.Api.V1.Mappers;
 

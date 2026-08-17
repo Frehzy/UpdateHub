@@ -1,4 +1,4 @@
-namespace UpdateHub.Server.Api.V1.DTOs.Response;
+namespace UpdateHub.Shared.Contracts;
 
 /// <summary>Группа компьютеров вместе с её составом.</summary>
 public class GroupDetailResponseDto : GroupResponseDto

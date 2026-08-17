@@ -1,4 +1,4 @@
-namespace UpdateHub.Server.Api.V1.DTOs.Request;
+namespace UpdateHub.Shared.Contracts;
 
 /// <summary>Изменение имени и группы компьютера.</summary>
 public class UpdateClientRequestDto

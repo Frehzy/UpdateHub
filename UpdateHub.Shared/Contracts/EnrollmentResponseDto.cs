@@ -1,4 +1,4 @@
-namespace UpdateHub.Server.Api.V1.DTOs.Response;
+namespace UpdateHub.Shared.Contracts;
 
 /// <summary>Заявка на регистрацию компьютера в панели управления.</summary>
 public class EnrollmentResponseDto

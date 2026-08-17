@@ -1,4 +1,4 @@
-namespace UpdateHub.Server.Api.V1.DTOs.Response;
+namespace UpdateHub.Shared.Contracts;
 
 /// <summary>Число обращений за одни сутки.</summary>
 public class StatsDayDto

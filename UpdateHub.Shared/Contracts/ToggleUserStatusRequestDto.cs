@@ -1,4 +1,4 @@
-namespace UpdateHub.Server.Api.V1.DTOs.Request;
+namespace UpdateHub.Shared.Contracts;
 
 /// <summary>Включение и отключение учётной записи.</summary>
 public class ToggleUserStatusRequestDto

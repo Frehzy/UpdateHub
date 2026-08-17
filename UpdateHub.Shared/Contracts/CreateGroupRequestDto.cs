@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UpdateHub.Server.Api.V1.DTOs.Request;
+namespace UpdateHub.Shared.Contracts;
 
 /// <summary>Создание группы компьютеров.</summary>
 public class CreateGroupRequestDto

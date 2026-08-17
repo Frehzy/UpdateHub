@@ -9,6 +9,7 @@ using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Domain.Enums;
 using UpdateHub.Server.Infrastructure.Configuration;
 using UpdateHub.Server.Infrastructure.Security;
+using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Server.Infrastructure.Database;
 

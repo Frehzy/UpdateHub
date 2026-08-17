@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace UpdateHub.Server.Api.V1.DTOs.Request;
+namespace UpdateHub.Shared.Contracts;
 
 /// <summary>Регистрация компьютера администратором.</summary>
 public class CreateClientRequestDto

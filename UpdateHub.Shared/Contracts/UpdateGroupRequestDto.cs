@@ -1,4 +1,4 @@
-namespace UpdateHub.Server.Api.V1.DTOs.Request;
+namespace UpdateHub.Shared.Contracts;
 
 /// <summary>Изменение группы компьютеров.</summary>
 public class UpdateGroupRequestDto

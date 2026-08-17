@@ -1,9 +1,9 @@
 using AutoMapper;
-using UpdateHub.Server.Api.V1.DTOs.Response;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Application.Abstractions.Services;
 using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Entities;
+using UpdateHub.Shared.Contracts;
 
 namespace UpdateHub.Server.Application.Services;
 

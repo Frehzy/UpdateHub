@@ -1,13 +1,13 @@
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using UpdateHub.Server.Api.V1.DTOs.Request;
-using UpdateHub.Server.Api.V1.DTOs.Response;
+using AutoMapper;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Application.Abstractions.Services;
 using UpdateHub.Server.Application.Manifest;
 using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Enums;
+using UpdateHub.Shared.Contracts;
+using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Server.Api.V1.Controllers;
 

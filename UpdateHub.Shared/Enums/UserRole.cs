@@ -1,4 +1,4 @@
-namespace UpdateHub.Server.Domain.Enums;
+namespace UpdateHub.Shared.Enums;
 
 /// <summary>Роль учётной записи.</summary>
 public enum UserRole

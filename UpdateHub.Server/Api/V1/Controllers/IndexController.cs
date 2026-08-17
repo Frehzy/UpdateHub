@@ -23,7 +23,6 @@ public class IndexController : ControllerBase
     /// </summary>
     /// <returns>Текстовая справка.</returns>
     /// <response code="200">Справка возвращена.</response>
-    [HttpGet("/")]
     [HttpGet("/api")]
     [HttpGet("/api/v1")]
     public IActionResult Get()
@@ -51,6 +50,7 @@ public class IndexController : ControllerBase
             .Append("  GET  /api/v1/admin/stats            статистика обращений\n")
             .Append('\n')
             .Append("Служебное:\n")
+            .Append("  GET  /                              панель управления в браузере\n")
             .Append("  GET  /health                        проверка работоспособности\n")
             .Append("  GET  /swagger                       описание API (только в режиме разработки)\n")
             .Append('\n')

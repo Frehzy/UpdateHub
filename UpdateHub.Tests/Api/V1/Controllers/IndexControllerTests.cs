@@ -15,10 +15,14 @@ namespace UpdateHub.Tests.Api.V1.Controllers;
 [Collection(ApiCollection.Name)]
 public class IndexControllerTests(UpdateHubApplication application)
 {
-    /// <summary>Справка отвечает по всем трём адресам без токена.</summary>
+    /// <summary>Справка отвечает по обоим адресам без токена.</summary>
     /// <param name="path">Проверяемый адрес.</param>
+    /// <remarks>
+    /// Корневой адрес в список не входит: его занимает панель управления.
+    /// Проверить её отсюда нельзя — файлы панели появляются только после
+    /// сборки браузерного приложения, а тесты поднимают один сервер.
+    /// </remarks>
     [Theory]
-    [InlineData("/")]
     [InlineData("/api")]
     [InlineData("/api/v1")]
     public async Task Index_AvailableWithoutToken(string path)
@@ -40,7 +44,7 @@ public class IndexControllerTests(UpdateHubApplication application)
     {
         using var client = application.CreateApiClient();
 
-        var text = await client.GetStringAsync("/");
+        var text = await client.GetStringAsync("/api");
 
         Assert.Contains("/api/v1/auth/login", text, StringComparison.Ordinal);
         Assert.Contains("/api/v1/sync/diff", text, StringComparison.Ordinal);
@@ -62,14 +66,25 @@ public class IndexControllerTests(UpdateHubApplication application)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    /// <summary>Несуществующий адрес отвечает 404, а не падением.</summary>
+    /// <summary>
+    /// Несуществующий адрес под <c>/api</c> отвечает 404 текстом.
+    /// </summary>
+    /// <remarks>
+    /// Проверка не формальная. Панель управления — одностраничное приложение,
+    /// и ради неё сервер отдаёт свою страницу на любой неизвестный адрес.
+    /// Если бы это правило распространилось на <c>/api</c>, bash-скрипт получил
+    /// бы на опечатку в адресе код 200 и HTML вместо ошибки — и продолжил бы
+    /// работать, считая, что всё в порядке.
+    /// </remarks>
     [Fact]
-    public async Task UnknownPath_ReturnsNotFound()
+    public async Task UnknownApiPath_ReturnsPlainTextNotFound()
     {
         using var client = application.CreateApiClient();
 
         var response = await client.GetAsync("/api/v1/takogo-adresa-net");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
+        Assert.StartsWith("error=", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 }
