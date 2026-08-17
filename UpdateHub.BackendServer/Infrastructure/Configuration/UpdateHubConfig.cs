@@ -88,16 +88,6 @@ public class UpdateHubConfig
     public int BackupKeepCount { get; set; } = 7;
 
     /// <summary>
-    /// Сколько попыток входа разрешено с одного адреса за минуту.
-    /// </summary>
-    /// <remarks>
-    /// Периметр закрыт межсетевым экраном, но не от того, кто уже в сети.
-    /// Значение выбрано с запасом: живому человеку хватает трёх попыток,
-    /// а перебор становится бессмысленно медленным.
-    /// </remarks>
-    public int LoginAttemptsPerMinute { get; set; } = 10;
-
-    /// <summary>
     /// Через сколько суток без обращений компьютер считается потерянным.
     /// </summary>
     public int StaleClientDays { get; set; } = 7;

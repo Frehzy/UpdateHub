@@ -4,7 +4,6 @@ using Microsoft.OpenApi;
 using System.IO.Compression;
 using System.Reflection;
 using System.Text.Json.Serialization;
-using System.Threading.RateLimiting;
 using UpdateHub.BackendServer.Api.V1.Mappers;
 using UpdateHub.BackendServer.Infrastructure.Database;
 using UpdateHub.BackendServer.Infrastructure.Diagnostics;
@@ -32,39 +31,20 @@ builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 
-// Ограничение частоты попыток входа. Периметр закрыт межсетевым экраном
-// и криптомаршрутизатором, но не от того, кто уже находится в сети:
-// перебор пароля изнутри ничем не мешало бы вести часами.
+// Ограничения частоты попыток входа здесь намеренно нет.
 //
-// Счёт ведётся по адресу обратившегося, а не по логину: иначе перебор шёл бы
-// по разным логинам с одной машины, обходя ограничение, а заодно чужие
-// попытки блокировали бы вход настоящему владельцу учётной записи.
-builder.Services.AddRateLimiter(options =>
-{
-    var attempts = builder.Configuration.GetValue("UpdateHub:LoginAttemptsPerMinute", 10);
-
-    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "неизвестный",
-        _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = attempts,
-            Window = TimeSpan.FromMinutes(1),
-
-            // Очередь не нужна: превышение — повод отказать сразу, а не
-            // держать соединение и создавать вид работающего входа.
-            QueueLimit = 0
-        }));
-
-    // Ответ текстом, как и всё в клиентской части: bash-скрипту нечем
-    // разбирать ни JSON, ни пустое тело.
-    options.OnRejected = async (context, cancellationToken) =>
-    {
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
-        await context.HttpContext.Response.WriteAsync(
-            "error=Слишком много попыток входа. Повторите через минуту\n", cancellationToken);
-    };
-});
+// Оно было добавлено и убрано: счёт вёлся по адресу обратившегося, а вход
+// выполняет каждая обслуживаемая машина — см. UpdateHub.Client/lib/auth.sh.
+// Перед сервером стоят межсетевой экран и криптомаршрутизатор, а такие
+// устройства предъявляют трафик под своим адресом, поэтому весь парк машин
+// попадал в одну ячейку счёта и делил на всех десяток попыток в минуту.
+// Одиннадцатая машина получала отказ и переставала получать обновления —
+// молча, в контуре, куда нужно ехать. Вдобавок ячейку расходовали удачные
+// входы, то есть исчерпывала её обычная работа, а не перебор.
+//
+// Если защита от перебора изнутри всё же понадобится, считать нужно только
+// неудачные попытки и по имени учётной записи: тогда работающие машины
+// не задеть в принципе. Это делается не здесь, а на пути входа.
 
 // Манифест и планы синхронизации — текст, который сжимается примерно в восемь раз.
 // На канале 2 Мбит/с это заметно; клиенту достаточно флага curl --compressed.
@@ -153,7 +133,6 @@ app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
 app.UseRouting();
-app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
