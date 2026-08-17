@@ -46,8 +46,21 @@ public class UpdateRequestRepository(AppDbContext context)
         DateTime? from,
         CancellationToken cancellationToken = default)
     {
+        // Сутки считаются по времени сервера, а не по UTC. Обращения хранятся
+        // в UTC — так их и надо хранить, — но администратор смотрит на список
+        // по местным часам: при смещении +7 всё, что произошло до семи утра,
+        // попадало в предыдущую дату, и сводка не совпадала с рабочим днём.
+        //
+        // Смещение берётся одним значением на весь период. Для поясов без
+        // перехода на летнее время это точно; в поясах с переходом сутки вокруг
+        // самого перехода сдвинутся на час — цена, которую здесь платить не жаль.
+        //
+        // В контейнере пояс по умолчанию UTC. Чтобы «серверное время» означало
+        // местное, контейнеру передаётся переменная TZ — см. Makefile.
+        var offsetMinutes = TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow).TotalMinutes;
+
         var rows = await Filtered(from)
-            .GroupBy(x => x.RequestTimestamp.Date)
+            .GroupBy(x => x.RequestTimestamp.AddMinutes(offsetMinutes).Date)
             .Select(g => new { Date = g.Key, Count = g.Count() })
             .OrderBy(x => x.Date)
             .ToListAsync(cancellationToken);

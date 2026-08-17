@@ -80,7 +80,8 @@ jobs:
             UpdateHub.Client/updatehub \
             UpdateHub.Client/install.sh \
             UpdateHub.Client/lib/*.sh \
-            UpdateHub.Client/tests/run-tests.sh
+            UpdateHub.Client/tests/run-tests.sh \
+            UpdateHub.Client/tests/e2e.sh
 
       - name: Тесты клиента
         run: ./UpdateHub.Client/tests/run-tests.sh
@@ -97,3 +98,26 @@ jobs:
       # Ошибка в контексте сборки обнаруживается только здесь.
       - name: Сборка образа
         run: docker build -t updatehub-server:ci .
+
+  # Сквозная проверка: настоящий клиент против настоящего сервера в контейнерах.
+  #
+  # Заведена потому, что остальные проверки стык между ними не закрывают. Тесты
+  # клиента работают против поддельного сервера на Python, написанного из того же
+  # понимания протокола, из которого получился настоящий: ошибись это понимание —
+  # обе стороны ошибутся одинаково, и все проверки пройдут. Тесты сервера
+  # обращаются к нему через HttpClient, а не через curl.
+  #
+  # Задача носит осведомительный характер: continue-on-error не даёт ей помешать
+  # слиянию в master. Она поднимает образ, устанавливает клиент в чистую Ubuntu
+  # и потому зависит от сети и внешних образов — отказ по такой причине не должен
+  # останавливать работу. Смотреть её итог стоит глазами.
+  e2e:
+    name: Сквозная проверка клиента и сервера
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Прогон
+        run: ./UpdateHub.Client/tests/e2e.sh

@@ -28,6 +28,7 @@
     <File Path="UpdateHub.Client/systemd/updatehub.service" />
     <File Path="UpdateHub.Client/systemd/updatehub.timer" />
     <File Path="UpdateHub.Client/tests/run-tests.sh" />
+    <File Path="UpdateHub.Client/tests/e2e.sh" />
     <File Path="UpdateHub.Client/tests/fake-server.py" />
   </Folder>
   <Folder Name="/Solution Items/">

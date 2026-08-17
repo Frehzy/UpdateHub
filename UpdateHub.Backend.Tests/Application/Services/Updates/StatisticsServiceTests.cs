@@ -275,6 +275,42 @@ public class StatisticsServiceTests : IDisposable
         Assert.Equal(2, day.Count);
     }
 
+    /// <summary>
+    /// Сутки в разбивке считаются по времени сервера, а не по UTC.
+    /// </summary>
+    /// <remarks>
+    /// Обращения хранятся в UTC, и это верно, но администратор смотрит на список
+    /// по местным часам: при смещении +7 всё, что случилось до семи утра,
+    /// попадало в предыдущую дату, и сводка расходилась с рабочим днём.
+    /// <para>
+    /// Проверка сравнивает дату не с <c>Date</c> исходного момента, а с его
+    /// переводом в пояс сервера. В сборке по коммитам пояс UTC, и там оба
+    /// значения совпадают; на машине разработчика со смещением +7 расхождение
+    /// уже видно — то есть возврат к прежнему поведению обнаружится там.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task GetStatisticsAsync_DailyBreakdown_UsesServerLocalDate()
+    {
+        await AddClientAsync("pc-sutki");
+
+        var moment = DateTime.UtcNow.AddDays(-3);
+        _database.Context.UpdateRequests.Add(new UpdateRequestEntity
+        {
+            ClientId = "pc-sutki",
+            RequestTimestamp = moment
+        });
+        await _database.Context.SaveChangesAsync();
+
+        var stats = await _service.GetStatisticsAsync(days: null);
+
+        var expected = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(moment, DateTimeKind.Utc),
+            TimeZoneInfo.Local).Date;
+
+        Assert.Equal(expected, Assert.Single(stats.RequestsByDay).Date);
+    }
+
     // ---------- Молчащие компьютеры ----------
 
     /// <summary>Собирает службу с заданным порогом молчания.</summary>

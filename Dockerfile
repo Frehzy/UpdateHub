@@ -33,8 +33,12 @@ WORKDIR /app
 
 # curl нужен только для HEALTHCHECK: в базовом образе aspnet его нет,
 # и без установки проверка состояния всегда завершалась бы ошибкой.
+#
+# tzdata нужен переменной TZ: без описаний поясов она молча не действует,
+# и «серверное время» осталось бы UTC. От него зависит разбивка статистики
+# по суткам — её считают по местным часам, а не по UTC.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/publish .
