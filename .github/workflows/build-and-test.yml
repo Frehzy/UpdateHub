@@ -32,20 +32,13 @@ jobs:
       - name: Сборка
         run: dotnet build UpdateHub.slnx --configuration Release --no-restore
 
+      # Способ запуска тестов задан в dotnet.config: xunit.v3 работает поверх
+      # Microsoft.Testing.Platform, а `dotnet test` на .NET 10 без этой настройки
+      # идёт прежним путём через VSTest и отказывается работать. Ключ
+      # --verbosity здесь не указан намеренно: у нового запуска свой набор
+      # ключей, и лишний привёл бы к отказу разобрать командную строку.
       - name: Тесты
-        run: dotnet test UpdateHub.slnx --configuration Release --no-build --verbosity normal
-
-      # Модель и миграции обязаны совпадать. Расхождение обнаруживается иначе
-      # при первом же запросе на боевом сервере, причём в виде «no such column».
-      # Тест в наборе это тоже проверяет, но отдельный шаг называет причину
-      # прямо в списке шагов, а не в выводе одного из двух сотен тестов.
-      - name: Проверка миграций
-        run: |
-          dotnet tool install --global dotnet-ef --version 10.0.11
-          export PATH="$PATH:$HOME/.dotnet/tools"
-          dotnet ef migrations has-pending-model-changes \
-            --project UpdateHub.BackendServer \
-            --no-build --configuration Release
+        run: dotnet test UpdateHub.slnx --configuration Release --no-build
 
   client:
     name: Клиент на bash
@@ -62,11 +55,15 @@ jobs:
             bash -n "$file"
           done
 
+      # Ключ --source-path=SCRIPTDIR обязателен: программа собрана из модулей,
+      # которые подключаются по пути относительно самого сценария. Без него
+      # shellcheck ищет их относительно текущего каталога, не находит и считает
+      # это замечанием — а замечание любого уровня для него означает отказ.
       - name: Статический разбор shellcheck
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck
-          shellcheck --external-sources --shell=bash \
+          shellcheck --external-sources --source-path=SCRIPTDIR --shell=bash \
             UpdateHub.Client/updatehub \
             UpdateHub.Client/install.sh \
             UpdateHub.Client/lib/*.sh \
