@@ -1,0 +1,232 @@
+@page "/"
+@inject ApiClient Api
+
+@*
+    Обзор: состояние каталога раздачи и сводка обращений. Первое, что нужно
+    администратору, — понять, разложены ли файлы и доходят ли до них компьютеры.
+*@
+
+<h1>Обзор</h1>
+
+@if (_error is not null)
+{
+    <div class="soobshchenie oshibka">@_error</div>
+}
+
+@if (_message is not null)
+{
+    <div class="soobshchenie udacha">@_message</div>
+}
+
+<div class="karta">
+    <h2>Каталог раздачи</h2>
+
+    @if (_manifest is null)
+    {
+        <p class="tusklyy">Загрузка…</p>
+    }
+    else
+    {
+        <table>
+            <tbody>
+                <tr>
+                    <th>Файлов в манифесте</th>
+                    <td>@_manifest.EntryCount</td>
+                </tr>
+                <tr>
+                    <th>Общий объём</th>
+                    <td>@FormatSize(_manifest.TotalSizeBytes)</td>
+                </tr>
+                <tr>
+                    <th>Поколение</th>
+                    <td>@_manifest.Generation</td>
+                </tr>
+                <tr>
+                    <th>Последний обход</th>
+                    <td>@FormatMoment(_manifest.LastScanCompletedAt)</td>
+                </tr>
+                <tr>
+                    <th>Обход идёт сейчас</th>
+                    <td>@(_manifest.IsScanning ? "да" : "нет")</td>
+                </tr>
+            </tbody>
+        </table>
+
+        @if (_manifest.RejectedPaths.Count > 0)
+        {
+            <div class="soobshchenie vnimanie">
+                <strong>Отклонённые пути (@_manifest.RejectedPaths.Count).</strong>
+                Эти файлы компьютерам не выдаются: имя не подходит для передачи
+                или совпадает с другим без учёта регистра.
+                <ul>
+                    @foreach (var path in _manifest.RejectedPaths)
+                    {
+                        <li>@path</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <button @onclick="RescanAsync" disabled="@_busy">
+            @(_busy ? "Обход выполняется…" : "Обойти каталог сейчас")
+        </button>
+        <span class="tusklyy">
+            Обход идёт и сам, раз в минуту. Кнопка нужна, чтобы не ждать после
+            подкладывания файлов.
+        </span>
+    }
+</div>
+
+<div class="karta">
+    <h2>Обращения за последние 30 суток</h2>
+
+    @if (_stats is null)
+    {
+        <p class="tusklyy">Загрузка…</p>
+    }
+    else
+    {
+        <table>
+            <tbody>
+                <tr>
+                    <th>Всего обращений</th>
+                    <td>@_stats.TotalRequests</td>
+                </tr>
+                <tr>
+                    <th>Разных компьютеров</th>
+                    <td>@_stats.UniqueClients</td>
+                </tr>
+                <tr>
+                    <th>Выдано данных</th>
+                    <td>@FormatSize(_stats.TotalDownloadedBytes)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        @if (_stats.RequestsByDay.Count > 0)
+        {
+            <div class="tablica-obolochka">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Обращений</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var day in _stats.RequestsByDay)
+                        {
+                            <tr>
+                                <td>@day.Date.ToString("dd.MM.yyyy")</td>
+                                <td>@day.Count</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private ManifestStatusResponseDto? _manifest;
+    private StatsResponseDto? _stats;
+    private string? _error;
+    private string? _message;
+    private bool _busy;
+
+    /// <summary>Загружает состояние манифеста и статистику.</summary>
+    /// <returns>Задача завершения.</returns>
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    /// <summary>Читает данные с сервера.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task LoadAsync()
+    {
+        _error = null;
+
+        var manifest = await Api.GetAsync<ManifestStatusResponseDto>("api/v1/admin/manifest/status");
+        if (manifest.IsSuccess)
+        {
+            _manifest = manifest.Value;
+        }
+        else
+        {
+            _error = manifest.Error;
+        }
+
+        var stats = await Api.GetAsync<StatsResponseDto>("api/v1/admin/stats");
+        if (stats.IsSuccess)
+        {
+            _stats = stats.Value;
+        }
+        else
+        {
+            _error ??= stats.Error;
+        }
+    }
+
+    /// <summary>
+    /// Запускает внеочередной обход каталога.
+    /// </summary>
+    /// <returns>Задача завершения.</returns>
+    /// <remarks>
+    /// Обход шестигигабайтного образа занимает заметное время, поэтому кнопка
+    /// блокируется до ответа: иначе администратор нажмёт её второй раз
+    /// и получит отказ «обход уже выполняется».
+    /// </remarks>
+    private async Task RescanAsync()
+    {
+        _busy = true;
+        _error = null;
+        _message = null;
+
+        var result = await Api.PostAsync<RescanResultDto>("api/v1/admin/manifest/rescan", body: null);
+
+        if (result.IsSuccess && result.Value is not null)
+        {
+            _message = $"Обход завершён: файлов {result.Value.TotalFiles}, " +
+                       $"пересчитано сумм {result.Value.HashedFiles}, изменений {result.Value.Changes}.";
+            await LoadAsync();
+        }
+        else
+        {
+            _error = result.Error;
+        }
+
+        _busy = false;
+    }
+
+    /// <summary>Переводит размер в удобные для чтения единицы.</summary>
+    /// <param name="bytes">Размер в байтах.</param>
+    /// <returns>Строка вида «5,9 ГБ».</returns>
+    private static string FormatSize(long bytes)
+    {
+        string[] units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+        double value = bytes;
+        var unit = 0;
+
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return $"{value:0.#} {units[unit]}";
+    }
+
+    /// <summary>
+    /// Показывает момент времени или прочерк.
+    /// </summary>
+    /// <param name="moment">Момент времени в UTC.</param>
+    /// <returns>Строка для показа.</returns>
+    /// <remarks>
+    /// Вид времени приходится проставлять вручную: сервер хранит время в UTC,
+    /// но в JSON оно приходит без пометки, и без <c>SpecifyKind</c> перевод
+    /// в местное время просто ничего не сделал бы.
+    /// </remarks>
+    private static string FormatMoment(DateTime? moment)
+        => moment is null
+            ? "не выполнялся"
+            : DateTime.SpecifyKind(moment.Value, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss");
+}

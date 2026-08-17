@@ -28,6 +28,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Ссылка на панель управления делает сборку «размещённой»: при публикации
+      результат сборки браузерного приложения попадает в wwwroot сервера,
+      и отдельного шага для него не нужно.
+    -->
+    <ProjectReference Include="..\UpdateHub.Admin\UpdateHub.Admin.csproj" />
     <ProjectReference Include="..\UpdateHub.Shared\UpdateHub.Shared.csproj" />
   </ItemGroup>
 

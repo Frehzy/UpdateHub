@@ -1,0 +1,69 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject AuthState Auth
+
+@*
+    Раскладка панели заодно решает, что вообще показывать.
+
+    Отдельной страницы входа и охраны маршрутов здесь нет намеренно: панель
+    целиком доступна только администратору, и «частично вошедшего» состояния
+    не бывает. Пока вход не выполнен, любой адрес показывает форму входа;
+    пока не сменён временный пароль — форму смены. Это надёжнее проверок
+    в каждой странице по отдельности: забыть тут нечего.
+*@
+
+@if (!Auth.IsReady)
+{
+    <div class="zagruzka-stranicy">Загрузка панели управления…</div>
+}
+else if (!Auth.IsAuthenticated)
+{
+    <LoginForm />
+}
+else if (Auth.MustChangePassword)
+{
+    <ChangePasswordForm Required="true" />
+}
+else
+{
+    <div class="oboloshka">
+        <div class="bokovaya-panel">
+            <div class="zagolovok">UpdateHub</div>
+            <nav>
+                <NavLink href="" Match="NavLinkMatch.All">Обзор</NavLink>
+                <NavLink href="clients">Компьютеры</NavLink>
+                <NavLink href="groups">Группы</NavLink>
+                <NavLink href="users">Пользователи</NavLink>
+                <NavLink href="enrollments">Заявки</NavLink>
+            </nav>
+            <div class="podval">
+                <div>@Auth.Username</div>
+                <button class="vtorichnaya" @onclick="LogoutAsync">Выйти</button>
+            </div>
+        </div>
+
+        <div class="soderzhimoe">
+            @Body
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Подписывается на изменения входа и восстанавливает состояние.</summary>
+    /// <returns>Задача завершения.</returns>
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Changed += OnAuthChanged;
+        await Auth.InitializeAsync();
+    }
+
+    /// <summary>Перерисовывает панель при смене состояния входа.</summary>
+    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
+
+    /// <summary>Выполняет выход.</summary>
+    /// <returns>Задача завершения.</returns>
+    private Task LogoutAsync() => Auth.LogoutAsync();
+
+    /// <summary>Отписывается от событий.</summary>
+    public void Dispose() => Auth.Changed -= OnAuthChanged;
+}

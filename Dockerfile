@@ -1,14 +1,26 @@
 # Сборка выполняется на машине с интернетом, готовый образ переносится
 # в закрытый контур командами 'make save' и 'make load'.
+#
+# Контекст сборки — корень репозитория: сервер ссылается на общую библиотеку
+# контрактов и на панель управления, и оба каталога обязаны попасть внутрь.
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY UpdateHub.Server.csproj .
-RUN dotnet restore
+# Сначала только файлы проектов: пока они не менялись, docker берёт слой
+# с восстановленными пакетами из кэша, а не тянет их заново.
+COPY UpdateHub.Server/UpdateHub.Server.csproj UpdateHub.Server/
+COPY UpdateHub.Shared/UpdateHub.Shared.csproj UpdateHub.Shared/
+COPY UpdateHub.Admin/UpdateHub.Admin.csproj UpdateHub.Admin/
+RUN dotnet restore UpdateHub.Server/UpdateHub.Server.csproj
 
-COPY . .
-RUN dotnet publish -c Release -o /app/publish --no-restore
+COPY UpdateHub.Server/ UpdateHub.Server/
+COPY UpdateHub.Shared/ UpdateHub.Shared/
+COPY UpdateHub.Admin/ UpdateHub.Admin/
+
+# Публикация сервера собирает и панель управления: она подключена ссылкой
+# на проект, и её файлы попадают в wwwroot.
+RUN dotnet publish UpdateHub.Server/UpdateHub.Server.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <!--
+    Панель управления. Собирается в статические файлы и отдаётся тем же
+    сервером: отдельный веб-сервер в закрытом контуре означал бы ещё один
+    образ, ещё один проброшенный порт и настройку CORS.
+
+    Приложение выполняется в браузере администратора, поэтому размер загрузки
+    роли почти не играет: панель открывают с той же машины или из её сети,
+    а не через канал 2 Мбит/с, по которому идут обновления на компьютеры.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.11" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UpdateHub.Shared\UpdateHub.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

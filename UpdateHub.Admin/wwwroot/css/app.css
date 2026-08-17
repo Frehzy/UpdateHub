@@ -1,0 +1,315 @@
+/*
+    Оформление панели управления.
+
+    Готовая библиотека стилей сюда не подключается намеренно: сервер стоит
+    в контуре без интернета, и ссылка на внешний CDN там просто не загрузится,
+    а класть в образ несколько сотен килобайт чужого CSS ради десятка таблиц
+    и форм незачем.
+*/
+
+:root {
+    --fon: #f4f5f7;
+    --fon-karty: #ffffff;
+    --tekst: #1f2328;
+    --tekst-tusklyy: #61676f;
+    --granica: #d8dbe0;
+    --osnovnoy: #2f6feb;
+    --osnovnoy-temnyy: #2352b8;
+    --opasnyy: #c0392b;
+    --uspeh: #1f7a3d;
+    --predupr: #9a6700;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--fon);
+    color: var(--tekst);
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.zagruzka-stranicy {
+    padding: 40px;
+    color: var(--tekst-tusklyy);
+}
+
+/* ---------- Раскладка ---------- */
+
+.oboloshka {
+    display: flex;
+    min-height: 100vh;
+}
+
+.bokovaya-panel {
+    width: 240px;
+    flex-shrink: 0;
+    background: #1f2328;
+    color: #e6e8eb;
+    padding: 20px 0;
+}
+
+.bokovaya-panel .zagolovok {
+    padding: 0 20px 20px;
+    font-size: 18px;
+    font-weight: 600;
+    border-bottom: 1px solid #33383f;
+}
+
+.bokovaya-panel nav {
+    display: flex;
+    flex-direction: column;
+    padding-top: 12px;
+}
+
+.bokovaya-panel nav a {
+    padding: 10px 20px;
+    color: #c6cad0;
+    text-decoration: none;
+}
+
+.bokovaya-panel nav a:hover {
+    background: #2a2f36;
+    color: #ffffff;
+}
+
+.bokovaya-panel nav a.active {
+    background: var(--osnovnoy);
+    color: #ffffff;
+}
+
+.bokovaya-panel .podval {
+    margin-top: auto;
+    padding: 20px;
+    font-size: 13px;
+    color: #9aa0a8;
+}
+
+.soderzhimoe {
+    flex: 1;
+    padding: 24px 32px;
+    min-width: 0;
+}
+
+.soderzhimoe h1 {
+    margin: 0 0 20px;
+    font-size: 22px;
+}
+
+/* ---------- Карточки и таблицы ---------- */
+
+.karta {
+    background: var(--fon-karty);
+    border: 1px solid var(--granica);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+}
+
+.karta h2 {
+    margin: 0 0 12px;
+    font-size: 16px;
+}
+
+.tablica-obolochka {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--fon-karty);
+}
+
+th,
+td {
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--granica);
+    white-space: nowrap;
+}
+
+th {
+    font-weight: 600;
+    color: var(--tekst-tusklyy);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+tbody tr:hover {
+    background: #fafbfc;
+}
+
+/* ---------- Формы и кнопки ---------- */
+
+input,
+select {
+    padding: 7px 10px;
+    border: 1px solid var(--granica);
+    border-radius: 4px;
+    font: inherit;
+    background: var(--fon-karty);
+    color: inherit;
+}
+
+input:focus,
+select:focus {
+    outline: 2px solid var(--osnovnoy);
+    outline-offset: -1px;
+}
+
+label {
+    display: block;
+    margin-bottom: 12px;
+}
+
+label span {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--tekst-tusklyy);
+}
+
+label input,
+label select {
+    width: 100%;
+}
+
+button {
+    padding: 7px 14px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: var(--osnovnoy);
+    color: #ffffff;
+    font: inherit;
+    cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+    background: var(--osnovnoy-temnyy);
+}
+
+button:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+button.vtorichnaya {
+    background: var(--fon-karty);
+    color: var(--tekst);
+    border-color: var(--granica);
+}
+
+button.vtorichnaya:hover:not(:disabled) {
+    background: var(--fon);
+}
+
+button.opasnaya {
+    background: var(--opasnyy);
+}
+
+button.opasnaya:hover:not(:disabled) {
+    background: #96291d;
+}
+
+.stroka-formy {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.stroka-formy label {
+    margin-bottom: 0;
+}
+
+/* ---------- Сообщения ---------- */
+
+.soobshchenie {
+    padding: 10px 14px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+}
+
+.soobshchenie.oshibka {
+    background: #fdecea;
+    color: var(--opasnyy);
+    border: 1px solid #f5c6c0;
+}
+
+.soobshchenie.udacha {
+    background: #e8f5ec;
+    color: var(--uspeh);
+    border: 1px solid #bfe0ca;
+}
+
+.soobshchenie.vnimanie {
+    background: #fdf5e3;
+    color: var(--predupr);
+    border: 1px solid #f0dfb5;
+}
+
+.metka {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    background: #eceef1;
+    color: var(--tekst-tusklyy);
+}
+
+.metka.zablokirovan {
+    background: #fdecea;
+    color: var(--opasnyy);
+}
+
+.metka.rabotaet {
+    background: #e8f5ec;
+    color: var(--uspeh);
+}
+
+.tusklyy {
+    color: var(--tekst-tusklyy);
+}
+
+/* ---------- Вход ---------- */
+
+.stranica-vhoda {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.stranica-vhoda .karta {
+    width: 100%;
+    max-width: 360px;
+    margin: 0;
+}
+
+/* ---------- Сообщение об ошибке Blazor ---------- */
+
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 20px;
+    background: #fdf5e3;
+    border-top: 1px solid #f0dfb5;
+    color: var(--predupr);
+    z-index: 1000;
+}
+
+#blazor-error-ui .zakryt {
+    float: right;
+    cursor: pointer;
+    padding-left: 12px;
+}

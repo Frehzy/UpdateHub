@@ -1,0 +1,64 @@
+@inject AuthState Auth
+
+@*
+    Форма входа. Отправляет те же поля и на тот же адрес, что и bash-скрипт
+    на компьютере: заводить для браузера отдельный способ входа значило бы
+    держать на сервере вторую проверку пароля.
+*@
+
+<div class="stranica-vhoda">
+    <div class="karta">
+        <h2>Вход в панель управления</h2>
+
+        @if (_error is not null)
+        {
+            <div class="soobshchenie oshibka">@_error</div>
+        }
+
+        <EditForm Model="this" OnValidSubmit="SubmitAsync">
+            <label>
+                <span>Логин</span>
+                <input @bind="_username" @bind:event="oninput" autocomplete="username" />
+            </label>
+
+            <label>
+                <span>Пароль</span>
+                <input type="password" @bind="_password" @bind:event="oninput" autocomplete="current-password" />
+            </label>
+
+            <button type="submit" disabled="@(_busy || !IsFilled)">
+                @(_busy ? "Проверка…" : "Войти")
+            </button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private string _username = string.Empty;
+    private string _password = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    /// <summary>Заполнены ли оба поля.</summary>
+    private bool IsFilled => _username.Length > 0 && _password.Length > 0;
+
+    /// <summary>
+    /// Выполняет вход.
+    /// </summary>
+    /// <returns>Задача завершения.</returns>
+    /// <remarks>
+    /// Пароль стирается при любом исходе: при удачном он больше не нужен,
+    /// при неудачном не должен остаться в поле, если администратор отойдёт
+    /// от машины.
+    /// </remarks>
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        _error = await Auth.LoginAsync(_username, _password);
+
+        _password = string.Empty;
+        _busy = false;
+    }
+}

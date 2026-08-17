@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UpdateHub — панель управления</title>
+    <base href="/" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" href="data:," />
+</head>
+
+<body>
+    <div id="app">
+        <div class="zagruzka-stranicy">Загрузка панели управления…</div>
+    </div>
+
+    <!--
+        Сообщение о необработанной ошибке. Blazor показывает его сам, добавляя
+        класс к элементу; без него сбой выглядел бы как замерший интерфейс.
+    -->
+    <div id="blazor-error-ui">
+        Произошла ошибка. Обновите страницу.
+        <a href="" class="perezagruzka">Обновить</a>
+        <span class="zakryt" onclick="document.getElementById('blazor-error-ui').style.display='none'">×</span>
+    </div>
+
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+
+</html>

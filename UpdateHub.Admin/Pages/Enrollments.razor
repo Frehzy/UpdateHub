@@ -1,0 +1,198 @@
+@page "/enrollments"
+@inject ApiClient Api
+
+@*
+    Заявки на регистрацию компьютеров. Заявку подаёт скрипт с машины, которая
+    ещё не заведена: предъявить ей нечего, поэтому адрес заявки — единственный
+    открытый без учётных данных. Заявка ничего не открывает сама по себе,
+    решение принимает человек здесь.
+*@
+
+<h1>Заявки на регистрацию</h1>
+
+@if (_error is not null)
+{
+    <div class="soobshchenie oshibka">@_error</div>
+}
+
+<div class="karta">
+    <div class="stroka-formy">
+        <label>
+            <span>Показывать</span>
+            <select @bind="_status" @bind:after="LoadAsync">
+                <option value="@nameof(EnrollmentStatus.Pending)">ожидающие решения</option>
+                <option value="@nameof(EnrollmentStatus.Approved)">одобренные</option>
+                <option value="@nameof(EnrollmentStatus.Rejected)">отклонённые</option>
+            </select>
+        </label>
+    </div>
+</div>
+
+@if (_enrollments is null)
+{
+    <p class="tusklyy">Загрузка…</p>
+}
+else if (_enrollments.Count == 0)
+{
+    <p class="tusklyy">Заявок нет.</p>
+}
+else
+{
+    <div class="tablica-obolochka">
+        <table>
+            <thead>
+                <tr>
+                    <th>Идентификатор</th>
+                    <th>Имя машины</th>
+                    <th>Система</th>
+                    <th>Откуда</th>
+                    <th>Кто просит</th>
+                    <th>Примечание</th>
+                    <th>Подана</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var request in _enrollments)
+                {
+                    <tr>
+                        <td>@request.ClientId</td>
+                        <td>@(request.Hostname ?? "—")</td>
+                        <td>@(request.OsVersion ?? "—")</td>
+                        <td>@(request.RemoteIpAddress ?? "—")</td>
+                        <td>@(request.RequestedByUsername ?? "—")</td>
+                        <td>@(request.Comment ?? "—")</td>
+                        <td>@FormatMoment(request.CreatedAt)</td>
+                        <td>
+                            @if (request.Status == nameof(EnrollmentStatus.Pending))
+                            {
+                                <select @onchange="@(e => _groupChoice[request.Id] = (string?)e.Value ?? string.Empty)">
+                                    <option value="">без группы</option>
+                                    @foreach (var group in _groups)
+                                    {
+                                        <option value="@group.Id">@group.Name</option>
+                                    }
+                                </select>
+                                <button disabled="@_busy" @onclick="@(() => ApproveAsync(request))">Одобрить</button>
+                                <button class="opasnaya" disabled="@_busy"
+                                        @onclick="@(() => RejectAsync(request))">Отклонить</button>
+                            }
+                            else
+                            {
+                                <span class="tusklyy">@DescribeResolution(request)</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_enrollments.Any(r => r.MatchingClientIds is { Count: > 0 }))
+    {
+        <div class="soobshchenie vnimanie">
+            У части заявок совпало железо с уже заведёнными компьютерами.
+            Обычно это переустановка системы на той же машине: тогда стоит
+            не заводить второй компьютер, а разобраться со старым.
+            <ul>
+                @foreach (var request in _enrollments.Where(r => r.MatchingClientIds is { Count: > 0 }))
+                {
+                    <li>@request.ClientId — совпадает с: @string.Join(", ", request.MatchingClientIds!)</li>
+                }
+            </ul>
+        </div>
+    }
+}
+
+@code {
+    private List<EnrollmentResponseDto>? _enrollments;
+    private List<GroupResponseDto> _groups = [];
+    private readonly Dictionary<string, string> _groupChoice = [];
+    private string _status = nameof(EnrollmentStatus.Pending);
+    private string? _error;
+    private bool _busy;
+
+    /// <summary>Загружает заявки и группы.</summary>
+    /// <returns>Задача завершения.</returns>
+    protected override async Task OnInitializedAsync()
+    {
+        var groups = await Api.GetAsync<GroupListResponseDto>("api/v1/admin/groups");
+        if (groups.IsSuccess && groups.Value is not null)
+        {
+            _groups = groups.Value.Groups;
+        }
+
+        await LoadAsync();
+    }
+
+    /// <summary>Читает заявки выбранного состояния.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task LoadAsync()
+    {
+        var result = await Api.GetAsync<EnrollmentListResponseDto>($"api/v1/admin/enrollments?status={_status}");
+
+        if (result.IsSuccess && result.Value is not null)
+        {
+            _enrollments = result.Value.Enrollments;
+            _error = null;
+        }
+        else
+        {
+            _error = result.Error;
+        }
+    }
+
+    /// <summary>
+    /// Одобряет заявку и заводит компьютер.
+    /// </summary>
+    /// <param name="request">Заявка.</param>
+    /// <returns>Задача завершения.</returns>
+    /// <remarks>
+    /// Группу можно указать сразу: тогда права, выданные на неё, начнут
+    /// действовать на новый компьютер без отдельного шага.
+    /// </remarks>
+    private async Task ApproveAsync(EnrollmentResponseDto request)
+    {
+        _busy = true;
+
+        var groupId = _groupChoice.GetValueOrDefault(request.Id, string.Empty);
+
+        var result = await Api.PostAsync(
+            $"api/v1/admin/enrollments/{request.Id}/approve",
+            new ApproveEnrollmentRequestDto { GroupId = groupId.Length > 0 ? groupId : null });
+
+        _error = result.Error;
+
+        await LoadAsync();
+        _busy = false;
+    }
+
+    /// <summary>Отклоняет заявку.</summary>
+    /// <param name="request">Заявка.</param>
+    /// <returns>Задача завершения.</returns>
+    private async Task RejectAsync(EnrollmentResponseDto request)
+    {
+        _busy = true;
+
+        var result = await Api.PostAsync($"api/v1/admin/enrollments/{request.Id}/reject");
+        _error = result.Error;
+
+        await LoadAsync();
+        _busy = false;
+    }
+
+    /// <summary>Описывает, кто и когда закрыл заявку.</summary>
+    /// <param name="request">Заявка.</param>
+    /// <returns>Строка для показа.</returns>
+    private static string DescribeResolution(EnrollmentResponseDto request)
+    {
+        var who = string.IsNullOrEmpty(request.ResolvedBy) ? "—" : request.ResolvedBy;
+        return request.ResolvedAt is null ? who : $"{who}, {FormatMoment(request.ResolvedAt.Value)}";
+    }
+
+    /// <summary>Показывает момент времени.</summary>
+    /// <param name="moment">Момент времени в UTC.</param>
+    /// <returns>Строка для показа.</returns>
+    private static string FormatMoment(DateTime moment)
+        => DateTime.SpecifyKind(moment, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+}
