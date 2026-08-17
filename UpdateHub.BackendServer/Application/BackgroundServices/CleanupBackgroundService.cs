@@ -31,7 +31,10 @@ public class CleanupBackgroundService(
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("Служба очистки запущена");
+        logger.LogInformation(
+            "Служба очистки запущена: обращения хранятся {Requests}, история {History}",
+            Describe(_config.RequestRetentionDays),
+            Describe(_config.HistoryRetentionDays));
 
         try
         {
@@ -50,6 +53,19 @@ public class CleanupBackgroundService(
     }
 
     /// <summary>
+    /// Описывает срок хранения для журнала.
+    /// </summary>
+    /// <param name="days">Срок в сутках; ноль и меньше означают «не удалять».</param>
+    /// <returns>Строка для вывода при старте.</returns>
+    /// <remarks>
+    /// Отключённая очистка обязана быть видна при запуске. Иначе администратор,
+    /// поставивший ноль, узнаёт о последствиях только по накопившейся базе —
+    /// или, до появления защиты, по исчезнувшей истории.
+    /// </remarks>
+    private static string Describe(int days)
+        => days > 0 ? $"{days} сут" : "бессрочно (очистка отключена)";
+
+    /// <summary>
     /// Вычисляет время до ближайшего запуска очистки.
     /// </summary>
     /// <returns>Интервал ожидания.</returns>
@@ -65,31 +81,59 @@ public class CleanupBackgroundService(
     /// Выполняет одну очистку в отдельной области зависимостей.
     /// </summary>
     /// <param name="cancellationToken">Токен отмены.</param>
-    private async Task RunCleanupAsync(CancellationToken cancellationToken)
+    /// <remarks>
+    /// Открытый метод, а не закрытый: иначе удаление данных остаётся вне
+    /// проверок — вызвать его можно было бы только ожиданием до трёх часов
+    /// ночи. Так же сделано у службы резервного копирования.
+    /// </remarks>
+    public async Task RunCleanupAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             using var scope = scopeFactory.CreateScope();
             var provider = scope.ServiceProvider;
 
-            var requestCutoff = DateTime.UtcNow.AddDays(-_config.RequestRetentionDays);
-            var historyCutoff = DateTime.UtcNow.AddDays(-_config.HistoryRetentionDays);
+            // Ноль и отрицательное значение означают «не удалять», а не «удалить
+            // всё». Прежде защиты не было: при RequestRetentionDays = 0 граница
+            // приходилась на текущий момент, и ближайшая ночная очистка молча
+            // сносила всю историю обращений — без возможности вернуть, на сервере,
+            // к которому никто не ходит.
+            //
+            // Ноль как «отключено» — то же соглашение, что у BackupIntervalHours
+            // и BackupKeepCount. Опечатка в настройке не должна уничтожать данные.
+            var requests = 0;
+            var networks = 0;
 
-            // Детализация удаляется каскадом вместе с обращениями.
-            var requests = await provider.GetRequiredService<IUpdateRequestRepository>()
-                .DeleteOlderThanAsync(requestCutoff, cancellationToken);
+            if (_config.RequestRetentionDays > 0)
+            {
+                var requestCutoff = DateTime.UtcNow.AddDays(-_config.RequestRetentionDays);
 
-            var changes = await provider.GetRequiredService<IFileChangeRepository>()
-                .DeleteOlderThanAsync(historyCutoff, cancellationToken);
+                // Детализация удаляется каскадом вместе с обращениями.
+                requests = await provider.GetRequiredService<IUpdateRequestRepository>()
+                    .DeleteOlderThanAsync(requestCutoff, cancellationToken);
 
-            var history = await provider.GetRequiredService<IClientHistoryRepository>()
-                .DeleteOlderThanAsync(historyCutoff, cancellationToken);
+                networks = await provider.GetRequiredService<IClientNetworkInfoRepository>()
+                    .DeactivateOlderThanAsync(requestCutoff, cancellationToken);
+            }
 
+            var changes = 0;
+            var history = 0;
+
+            if (_config.HistoryRetentionDays > 0)
+            {
+                var historyCutoff = DateTime.UtcNow.AddDays(-_config.HistoryRetentionDays);
+
+                changes = await provider.GetRequiredService<IFileChangeRepository>()
+                    .DeleteOlderThanAsync(historyCutoff, cancellationToken);
+
+                history = await provider.GetRequiredService<IClientHistoryRepository>()
+                    .DeleteOlderThanAsync(historyCutoff, cancellationToken);
+            }
+
+            // Просроченные токены удаляются всегда: срок их жизни задан при
+            // выдаче, и хранить недействительные незачем.
             var tokens = await provider.GetRequiredService<IRefreshTokenRepository>()
                 .DeleteExpiredAsync(cancellationToken);
-
-            var networks = await provider.GetRequiredService<IClientNetworkInfoRepository>()
-                .DeactivateOlderThanAsync(requestCutoff, cancellationToken);
 
             logger.LogInformation(
                 "Очистка завершена: обращений {Requests}, изменений файлов {Changes}, " +
