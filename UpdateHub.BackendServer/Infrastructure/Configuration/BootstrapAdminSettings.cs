@@ -8,7 +8,7 @@ namespace UpdateHub.BackendServer.Infrastructure.Configuration;
 /// Нужны потому, что завести пользователя можно только под администратором,
 /// а на пустой базе администратора ещё нет. После первого входа пароль
 /// обязателен к смене — учётной записи выставляется
-/// <see cref="Domain.Entities.UserEntity.MustChangePassword"/>.
+/// <see cref="Domain.Entities.Users.UserEntity.MustChangePassword"/>.
 /// Если пароль не задан, сервер сгенерирует случайный и один раз напечатает его в лог.
 /// </remarks>
 public class BootstrapAdminSettings

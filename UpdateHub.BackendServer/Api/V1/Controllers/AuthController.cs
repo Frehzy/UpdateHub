@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using UpdateHub.BackendServer.Api.V1.DTOs.Request;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Clients;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Users;
@@ -35,7 +34,6 @@ public class AuthController(
     /// <response code="401">Неверные учётные данные либо нет прав на компьютер.</response>
     [HttpPost("login")]
     [AllowAnonymous]
-    [EnableRateLimiting("login")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
     public async Task<IActionResult> Login([FromForm] LoginRequestDto request, CancellationToken cancellationToken)
     {

@@ -99,7 +99,13 @@ public class BackupBackgroundService(
             // не принимает параметров. Он приходит из файла настроек, не от
             // пользователя, но одинарные кавычки всё равно экранируются.
             var quoted = path.Replace("'", "''");
+
+            // EF1002 предупреждает о подстановке в текст запроса. Здесь она
+            // неизбежна — параметр SQLite в этой команде не примет, — а значение
+            // экранировано строкой выше, поэтому предупреждение снимается точечно.
+#pragma warning disable EF1002
             await context.Database.ExecuteSqlRawAsync($"VACUUM INTO '{quoted}'", cancellationToken);
+#pragma warning restore EF1002
 
             var size = new FileInfo(path).Length;
             logger.LogInformation("Снята резервная копия базы: {Path} ({Size} байт)", path, size);

@@ -64,6 +64,11 @@ public sealed class UpdateHubApplication : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("UpdateHub__FilesPath", FilesPath);
         Environment.SetEnvironmentVariable("UpdateHub__DatabasePath", Path.Combine(Root, "data", "updatehub.db"));
 
+        // Каталог копий тоже уводится в папку прогона. Без этого он остаётся
+        // тем, что задан в настройках, и служба копирования пыталась бы писать
+        // мимо временной папки — на машине без прав на этот путь тест падал.
+        Environment.SetEnvironmentVariable("UpdateHub__BackupPath", Path.Combine(Root, "backup"));
+
         // Обычно сканер пропускает файлы, изменённые за последние пятнадцать секунд:
         // они ещё могут дописываться, и хэш получился бы от половины файла. В тесте
         // файл создаётся и тут же запрашивается, поэтому выдержка не нужна.

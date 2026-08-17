@@ -9,7 +9,7 @@ namespace UpdateHub.BackendServer.Domain.Entities.Clients;
 /// </summary>
 /// <remarks>
 /// Записи создаются только администратором либо одобрением заявки
-/// (<see cref="EnrollmentRequestEntity"/>). Обращение с неизвестным
+/// (<see cref="Enrollments.EnrollmentRequestEntity"/>). Обращение с неизвестным
 /// идентификатором отклоняется, а не заводит нового клиента автоматически.
 /// </remarks>
 public class ClientEntity

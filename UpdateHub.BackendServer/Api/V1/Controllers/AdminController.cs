@@ -31,6 +31,7 @@ namespace UpdateHub.BackendServer.Api.V1.Controllers;
 /// <param name="groupService">Управление группами и правами.</param>
 /// <param name="authService">Создание учётных записей.</param>
 /// <param name="statisticsService">Сводная статистика.</param>
+/// <param name="backupService">Внеочередная резервная копия базы.</param>
 /// <param name="enrollmentService">Рассмотрение заявок.</param>
 /// <param name="manifestScanService">Пересборка манифеста.</param>
 /// <param name="manifestState">Состояние манифеста.</param>
