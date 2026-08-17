@@ -15,7 +15,13 @@
 
 set -euo pipefail
 
-UH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Символьная ссылка разыменовывается обязательно. Установщик кладёт клиент
+# в /opt/updatehub и делает ссылку /usr/local/bin/updatehub, поэтому при
+# обычном запуске по имени BASH_SOURCE указывает на ссылку. Без readlink
+# каталог модулей вычислялся как /usr/local/bin/lib, которого нет, и
+# установленный клиент падал на первой же строке подключения:
+# «/usr/local/bin/lib/common.sh: No such file or directory».
+UH_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
 # shellcheck source=lib/common.sh
 . "$UH_ROOT/lib/common.sh"
