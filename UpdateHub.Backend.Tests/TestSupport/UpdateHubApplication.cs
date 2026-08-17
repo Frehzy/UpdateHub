@@ -258,9 +258,12 @@ public sealed class UpdateHubApplication : WebApplicationFactory<Program>
     {
         base.Dispose(disposing);
 
-        if (disposing && Directory.Exists(Root))
+        // База здесь настоящий файл, и её каталог убирается той же уборкой,
+        // что и каталог копий: приложение уже остановлено, но соединения к базе
+        // остаются в пуле Microsoft.Data.Sqlite и держат файл открытым.
+        if (disposing)
         {
-            Directory.Delete(Root, recursive: true);
+            TempDirectory.Remove(Root);
         }
     }
 }
