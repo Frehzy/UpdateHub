@@ -10,6 +10,7 @@ using UpdateHub.BackendServer.Domain.Entities.Clients;
 using UpdateHub.BackendServer.Domain.Entities.Groups;
 using UpdateHub.BackendServer.Domain.Entities.Users;
 using UpdateHub.BackendServer.Domain.Enums;
+using UpdateHub.BackendServer.Infrastructure.Configuration;
 using UpdateHub.BackendServer.Infrastructure.Security;
 using UpdateHub.Shared.Enums;
 
@@ -57,17 +58,46 @@ public class AuthServiceTests : IDisposable
             new ClientBlockHistoryRepository(context),
             NullLogger<ClientAccessService>.Instance);
 
-        _service = new AuthService(
-            new UserRepository(context),
-            new RefreshTokenRepository(context),
-            new UserClientAccessRepository(context),
-            new UserGroupAccessRepository(context),
-            accessService,
-            _clientService,
-            tokenGenerator,
-            _hasher,
-            NullLogger<AuthService>.Instance);
+        _tokenGenerator = tokenGenerator;
+        _accessService = accessService;
+
+        _service = CreateService(_throttle);
     }
+
+    private readonly TokenGenerator _tokenGenerator;
+    private readonly ClientAccessService _accessService;
+
+    /// <summary>
+    /// Собирает службу авторизации с заданным ограничителем.
+    /// </summary>
+    /// <param name="throttle">Ограничитель подбора пароля.</param>
+    /// <returns>Служба.</returns>
+    /// <remarks>
+    /// Отдельный метод нужен ради проверки самого ограничителя на пути входа:
+    /// у остальных проверок предел взят с запасом, иначе они закрыли бы вход
+    /// друг другу неверными паролями.
+    /// </remarks>
+    private AuthService CreateService(LoginThrottle throttle)
+        => new(
+            new UserRepository(_database.Context),
+            new RefreshTokenRepository(_database.Context),
+            new UserClientAccessRepository(_database.Context),
+            new UserGroupAccessRepository(_database.Context),
+            _accessService,
+            _clientService,
+            _tokenGenerator,
+            _hasher,
+            throttle,
+            NullLogger<AuthService>.Instance);
+
+    /// <summary>Ограничитель подбора пароля, общий для всех проверок класса.</summary>
+    /// <remarks>
+    /// Предел взят с запасом: почти все проверки здесь намеренно вводят неверный
+    /// пароль, и с настройкой по умолчанию они закрыли бы вход друг другу.
+    /// Поведение самого ограничителя проверяется отдельно — LoginThrottleTests.
+    /// </remarks>
+    private readonly LoginThrottle _throttle =
+        new(Options.Create(new UpdateHubConfig { LoginFailureLimit = 1000 }));
 
     /// <summary>Заводит пользователя.</summary>
     /// <param name="username">Логин.</param>
@@ -413,6 +443,65 @@ public class AuthServiceTests : IDisposable
     {
         await Assert.ThrowsAsync<ArgumentException>(
             () => _service.CreateUserAsync("petrov", "korotk", UserRole.Client, null, null));
+    }
+
+    /// <summary>
+    /// После исчерпания попыток вход закрывается даже с верным паролем.
+    /// </summary>
+    /// <remarks>
+    /// Проверка того, что ограничитель вообще подключён к пути входа. Без неё
+    /// он мог бы остаться незадействованным, а все проверки — зелёными:
+    /// собственные тесты LoginThrottle работают с ним напрямую и о службе
+    /// авторизации ничего не знают.
+    /// </remarks>
+    [Fact]
+    public async Task LoginAsync_AfterFailureLimit_RefusesEvenCorrectPassword()
+    {
+        await AddUserAsync("ivanov", "parol12345", UserRole.Admin);
+
+        var service = CreateService(new LoginThrottle(
+            Options.Create(new UpdateHubConfig { LoginFailureLimit = 2, LoginBlockMinutes = 5 })));
+
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            await Assert.ThrowsAsync<AuthenticationFailedException>(
+                () => service.LoginAsync("ivanov", "nevernyy", string.Empty, _connection));
+        }
+
+        var refused = await Assert.ThrowsAsync<AuthenticationFailedException>(
+            () => service.LoginAsync("ivanov", "parol12345", string.Empty, _connection));
+
+        Assert.Contains("Слишком много неудачных попыток", refused.Message);
+    }
+
+    /// <summary>
+    /// Удачный вход снимает накопленные неудачи, и работа продолжается.
+    /// </summary>
+    /// <remarks>
+    /// Свойство, из-за отсутствия которого пришлось снять прежний ограничитель:
+    /// тот расходовал запас удачными входами, и его исчерпывала обычная работа.
+    /// </remarks>
+    [Fact]
+    public async Task LoginAsync_SuccessResetsFailureCount()
+    {
+        await AddUserAsync("ivanov", "parol12345", UserRole.Admin);
+
+        var service = CreateService(new LoginThrottle(
+            Options.Create(new UpdateHubConfig { LoginFailureLimit = 2, LoginBlockMinutes = 5 })));
+
+        await Assert.ThrowsAsync<AuthenticationFailedException>(
+            () => service.LoginAsync("ivanov", "nevernyy", string.Empty, _connection));
+
+        // Удачный вход обнуляет счёт.
+        await service.LoginAsync("ivanov", "parol12345", string.Empty, _connection);
+
+        // Значит одной новой неудачи снова недостаточно, и верный пароль работает.
+        await Assert.ThrowsAsync<AuthenticationFailedException>(
+            () => service.LoginAsync("ivanov", "nevernyy", string.Empty, _connection));
+
+        var result = await service.LoginAsync("ivanov", "parol12345", string.Empty, _connection);
+
+        Assert.NotNull(result.AccessToken);
     }
 
     /// <summary>Освобождает базу.</summary>

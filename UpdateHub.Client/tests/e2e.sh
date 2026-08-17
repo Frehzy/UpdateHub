@@ -256,6 +256,40 @@ check_selftest() {
     fi
 }
 
+check_install_artifacts() {
+    step "Установка положила всё на место"
+
+    # Ссылка в /usr/local/bin — единственный способ, которым клиент вызывают
+    # в работе, и именно на ней он однажды перестал запускаться.
+    if client_exec "test -L /usr/local/bin/updatehub"; then
+        ok "ссылка /usr/local/bin/updatehub создана"
+    else
+        fail "ссылки /usr/local/bin/updatehub нет"
+    fi
+
+    if client_exec "test -f /opt/updatehub/lib/common.sh"; then
+        ok "модули установлены в /opt/updatehub/lib"
+    else
+        fail "модулей в /opt/updatehub/lib нет"
+    fi
+
+    # Права 600 на файл настроек: в нём лежит пароль.
+    local mode
+    mode="$(client_exec "stat -c %a /etc/updatehub/updatehub.conf" | tr -d '\r\n')"
+    if [ "$mode" = "600" ]; then
+        ok "права на файл настроек 600"
+    else
+        fail "ожидались права 600 на файл настроек, получено $mode"
+    fi
+
+    # Без ротации журнал растёт без предела: запуск в сутки годами.
+    if client_exec "test -f /etc/logrotate.d/updatehub"; then
+        ok "правило ротации журнала установлено"
+    else
+        fail "правила ротации журнала нет"
+    fi
+}
+
 check_sync_before_registration() {
     step "Обновление до регистрации отклоняется"
 
@@ -445,6 +479,7 @@ main() {
 
     login_admin
     check_selftest
+    check_install_artifacts
     check_sync_before_registration
     check_enroll
     check_approve

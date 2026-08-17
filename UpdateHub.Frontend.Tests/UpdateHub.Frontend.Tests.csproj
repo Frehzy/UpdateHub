@@ -26,6 +26,18 @@
       бы дописать в двести строк, где он ничего не меняет.
     -->
     <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+
+    <!--
+      NU1902 — известная уязвимость средней важности в AngleSharp 1.3.0. Пакет
+      приходит зависимостью bUnit и разбирает разметку, которую порождают наши
+      же компоненты, внутри процесса проверок. На сервер он не попадает: проект
+      тестов в образ не публикуется. Более новой версии bUnit, тянущей
+      исправленный AngleSharp, на сегодня нет.
+      Предупреждение снято точечно и по одному номеру, а не проверкой целиком:
+      уязвимость в прямой зависимости обязана и дальше останавливать сборку.
+      Как только bUnit обновит зависимость — эту строку убрать.
+    -->
+    <NoWarn>$(NoWarn);NU1902</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -33,6 +45,13 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <!--
+      bUnit поднимает компоненты Blazor в памяти и даёт разобрать полученную
+      разметку. Без него панель проверялась только со стороны служб, а сама
+      разметка — ничем: обращение к пустой ссылке в шаблоне даёт пустую
+      страницу, и увидеть это можно было только глазами.
+    -->
+    <PackageReference Include="bunit" Version="2.0.66" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
       <PrivateAssets>all</PrivateAssets>

@@ -18,6 +18,7 @@ namespace UpdateHub.BackendServer.Application.Services.Users;
 /// <param name="clientService">Управление компьютерами.</param>
 /// <param name="tokenGenerator">Выпуск токенов.</param>
 /// <param name="passwordHasher">Хэширование паролей.</param>
+/// <param name="loginThrottle">Ограничитель подбора пароля.</param>
 /// <param name="logger">Журнал.</param>
 public class AuthService(
     IUserRepository userRepository,
@@ -28,6 +29,7 @@ public class AuthService(
     IClientService clientService,
     TokenGenerator tokenGenerator,
     PasswordHasher passwordHasher,
+    LoginThrottle loginThrottle,
     ILogger<AuthService> logger) : IAuthService
 {
     /// <summary>Минимальная длина пароля.</summary>
@@ -41,6 +43,19 @@ public class AuthService(
         ConnectionContext context,
         CancellationToken cancellationToken = default)
     {
+        // Ограничитель спрашивается до сверки пароля: иначе перебор шёл бы
+        // с той же скоростью, только с отказом в конце.
+        var blocked = loginThrottle.GetRemainingBlock(username);
+        if (blocked is not null)
+        {
+            logger.LogWarning(
+                "Вход под логином {Username} закрыт после неудачных попыток, осталось {Seconds} с",
+                username, (int)blocked.Value.TotalSeconds);
+
+            throw new AuthenticationFailedException(
+                $"Слишком много неудачных попыток. Повторите через {Math.Max(1, (int)blocked.Value.TotalMinutes + 1)} мин");
+        }
+
         var user = await userRepository.GetByUsernameAsync(username, cancellationToken);
 
         // Пароль проверяется даже при отсутствии пользователя, чтобы время ответа
@@ -49,9 +64,17 @@ public class AuthService(
 
         if (user is null || !passwordValid)
         {
+            // Неудача учитывается и для несуществующего логина: иначе перебор
+            // имён обходил бы ограничение целиком.
+            loginThrottle.RegisterFailure(username);
+
             logger.LogWarning("Неудачный вход под логином {Username} с адреса {Ip}", username, context.RemoteIpAddress);
             throw new AuthenticationFailedException("Неверный логин или пароль");
         }
+
+        // Удачная сверка пароля обнуляет счёт. Именно поэтому работающая машина
+        // ограничителя не встретит, сколько бы их ни было за одним адресом.
+        loginThrottle.RegisterSuccess(username);
 
         if (!user.IsActive)
         {
