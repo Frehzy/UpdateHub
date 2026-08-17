@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # Вход на сервер и хранение токенов.
+#
+# shellcheck disable=SC2153
+# Настройки USERNAME и PASSWORD и локальные username и password различаются
+# только регистром — это не опечатка: первые приходят из файла настроек,
+# вторые могут быть спрошены у человека.
 
 ACCESS_TOKEN=""
 REFRESH_TOKEN=""

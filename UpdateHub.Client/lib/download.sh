@@ -108,10 +108,12 @@ download_all() {
 
     total="$(wc -l <"$list_file" | tr -d ' ')"
 
-    local hash path line
+    local path line
     while IFS= read -r line; do
         [ -n "$line" ] || continue
-        hash="${line%%  *}"
+
+        # Сумма из строки здесь не нужна: её проверит md5sum -c по тому же
+        # списку целиком, после того как всё скачано.
         path="${line#*  }"
 
         done_count=$((done_count + 1))
