@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
-using UpdateHub.FrontendServer;
 using UpdateHub.FrontendServer.Services;
+using UpdateHub.FrontendServer;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 

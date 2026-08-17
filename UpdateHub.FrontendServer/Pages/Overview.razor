@@ -128,8 +128,84 @@
     }
 </div>
 
+
+<div class="karta">
+    <h2>Давно не выходили на связь</h2>
+
+    @if (_stale is null)
+    {
+        <p class="tusklyy">Загрузка…</p>
+    }
+    else if (_stale.Total == 0)
+    {
+        <p class="tusklyy">Все компьютеры выходили на связь за последние @_stale.ThresholdDays сут.</p>
+    }
+    else
+    {
+        <p>
+            Не обращались дольше @_stale.ThresholdDays сут: <strong>@_stale.Total</strong>.
+            Причины бывают разные — машину выключили, скрипт не установлен, права отозваны.
+        </p>
+        <div class="tablica-obolochka">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Идентификатор</th>
+                        <th>Имя машины</th>
+                        <th>Группа</th>
+                        <th>Последнее обращение</th>
+                        <th>Состояние</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var client in _stale.Clients)
+                    {
+                        <tr>
+                            <td>@client.ClientId</td>
+                            <td>@(client.Name ?? "—")</td>
+                            <td>@(client.GroupName ?? "—")</td>
+                            <td>
+                                @if (client.LastRequestAt is null)
+                                {
+                                    <span class="metka zablokirovan">ни разу</span>
+                                }
+                                else
+                                {
+                                    @($"{FormatMoment(client.LastRequestAt)} ({client.DaysSinceLastRequest} сут назад)")
+                                }
+                            </td>
+                            <td>
+                                @if (client.IsBlocked)
+                                {
+                                    <span class="metka zablokirovan">заблокирован</span>
+                                }
+                                else
+                                {
+                                    <span class="metka">работает</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div class="karta">
+    <h2>Резервная копия базы</h2>
+    <p class="tusklyy">
+        Копии снимаются по расписанию. Кнопка нужна перед тем, как что-то менять
+        руками: в такой момент ждать до ночи неразумно.
+    </p>
+    <button @onclick="CreateBackupAsync" disabled="@_busy">
+        @(_busy ? "Снятие копии…" : "Снять копию сейчас")
+    </button>
+</div>
+
 @code {
     private ManifestStatusResponseDto? _manifest;
+    private StaleClientListResponseDto? _stale;
     private StatsResponseDto? _stats;
     private string? _error;
     private string? _message;
@@ -164,6 +240,16 @@
         {
             _error ??= stats.Error;
         }
+
+        var stale = await Api.GetAsync<StaleClientListResponseDto>("api/v1/admin/clients/stale");
+        if (stale.IsSuccess)
+        {
+            _stale = stale.Value;
+        }
+        else
+        {
+            _error ??= stale.Error;
+        }
     }
 
     /// <summary>
@@ -188,6 +274,37 @@
             _message = $"Обход завершён: файлов {result.Value.TotalFiles}, " +
                        $"пересчитано сумм {result.Value.HashedFiles}, изменений {result.Value.Changes}.";
             await LoadAsync();
+        }
+        else
+        {
+            _error = result.Error;
+        }
+
+        _busy = false;
+    }
+
+    /// <summary>
+    /// Снимает резервную копию базы по требованию.
+    /// </summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task CreateBackupAsync()
+    {
+        _busy = true;
+        _error = null;
+        _message = null;
+
+        var result = await Api.PostAsync<BackupResultDto>("api/v1/admin/backup", body: null);
+
+        if (result.IsSuccess && result.Value is not null)
+        {
+            if (result.Value.Created)
+            {
+                _message = $"{result.Value.Message}: {result.Value.Path} ({FormatSize(result.Value.SizeBytes)})";
+            }
+            else
+            {
+                _error = result.Value.Message;
+            }
         }
         else
         {

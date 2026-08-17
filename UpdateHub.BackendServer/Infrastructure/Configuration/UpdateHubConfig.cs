@@ -60,6 +60,9 @@ public class UpdateHubConfig
     /// <summary>Абсолютный путь к файлу базы данных.</summary>
     public string ResolvedDatabasePath => Resolve(DatabasePath);
 
+    /// <summary>Каталог резервных копий, приведённый к абсолютному виду.</summary>
+    public string ResolvedBackupPath => Resolve(BackupPath);
+
     /// <summary>
     /// Приводит путь из конфигурации к абсолютному виду.
     /// </summary>
@@ -75,6 +78,45 @@ public class UpdateHubConfig
     /// одинаковым: файлы окажутся рядом с приложением, в <c>bin\Debug\net10.0</c>.
     /// В Docker пути заданы абсолютными, поэтому там ничего не меняется.
     /// </remarks>
+    /// <summary>
+    /// Каталог резервных копий базы.
+    /// </summary>
+    /// <remarks>
+    /// Обязан лежать вне тома с базой: смысл копии в том, чтобы пережить
+    /// потерю тома. В Docker сюда пробрасывается отдельная папка Windows,
+    /// которую администратор забирает штатным резервным копированием.
+    /// </remarks>
+    public string BackupPath { get; set; } = "/app/backup";
+
+    /// <summary>
+    /// Как часто снимать копию, в часах. Ноль отключает копирование.
+    /// </summary>
+    public int BackupIntervalHours { get; set; } = 24;
+
+    /// <summary>
+    /// Сколько последних копий хранить.
+    /// </summary>
+    /// <remarks>
+    /// База небольшая — учётные записи, права и история обращений за месяц.
+    /// Недельного запаса достаточно, чтобы заметить порчу и откатиться.
+    /// </remarks>
+    public int BackupKeepCount { get; set; } = 7;
+
+    /// <summary>
+    /// Сколько попыток входа разрешено с одного адреса за минуту.
+    /// </summary>
+    /// <remarks>
+    /// Периметр закрыт межсетевым экраном, но не от того, кто уже в сети.
+    /// Значение выбрано с запасом: живому человеку хватает трёх попыток,
+    /// а перебор становится бессмысленно медленным.
+    /// </remarks>
+    public int LoginAttemptsPerMinute { get; set; } = 10;
+
+    /// <summary>
+    /// Через сколько суток без обращений компьютер считается потерянным.
+    /// </summary>
+    public int StaleClientDays { get; set; } = 7;
+
     public static string Resolve(string path)
     {
         if (string.IsNullOrWhiteSpace(path))

@@ -1,4 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using UpdateHub.BackendServer.Domain.Entities.Clients;
+using UpdateHub.BackendServer.Domain.Entities.Enrollments;
+using UpdateHub.BackendServer.Domain.Entities.Groups;
+using UpdateHub.BackendServer.Domain.Entities.Manifest;
+using UpdateHub.BackendServer.Domain.Entities.Updates;
+using UpdateHub.BackendServer.Domain.Entities.Users;
 
 #nullable disable
 
@@ -40,7 +46,7 @@ internal static class InitialModel
     /// <param name="modelBuilder">Построитель модели.</param>
     private static void BuildEntities(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientBlockHistoryEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientBlockHistoryEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -69,7 +75,7 @@ internal static class InitialModel
             b.ToTable("ClientBlockHistories");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientComputerInfoEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientComputerInfoEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -116,7 +122,7 @@ internal static class InitialModel
             b.ToTable("ClientComputerInfos");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -145,7 +151,7 @@ internal static class InitialModel
             b.ToTable("Clients");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientHistoryEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientHistoryEntity", b =>
         {
             b.Property<int>("Id")
                 .ValueGeneratedOnAdd()
@@ -176,7 +182,7 @@ internal static class InitialModel
             b.ToTable("ClientHistories");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientNetworkInfoEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientNetworkInfoEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -209,7 +215,7 @@ internal static class InitialModel
             b.ToTable("ClientNetworkInfos");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.EnrollmentRequestEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Enrollments.EnrollmentRequestEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -259,7 +265,7 @@ internal static class InitialModel
             b.ToTable("EnrollmentRequests");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.FileChangeEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Manifest.FileChangeEntity", b =>
         {
             b.Property<int>("Id")
                 .ValueGeneratedOnAdd()
@@ -295,7 +301,7 @@ internal static class InitialModel
             b.ToTable("FileChanges");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.GroupEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Groups.GroupEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -324,7 +330,7 @@ internal static class InitialModel
             b.ToTable("Groups");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ManifestEntryEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Manifest.ManifestEntryEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -357,7 +363,7 @@ internal static class InitialModel
             b.ToTable("ManifestEntries");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.RefreshTokenEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Users.RefreshTokenEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -395,7 +401,7 @@ internal static class InitialModel
             b.ToTable("RefreshTokens");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UpdateDetailEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Updates.UpdateDetailEntity", b =>
         {
             b.Property<int>("Id")
                 .ValueGeneratedOnAdd()
@@ -430,7 +436,7 @@ internal static class InitialModel
             b.ToTable("UpdateDetails");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UpdateRequestEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Updates.UpdateRequestEntity", b =>
         {
             b.Property<int>("Id")
                 .ValueGeneratedOnAdd()
@@ -477,7 +483,7 @@ internal static class InitialModel
             b.ToTable("UpdateRequests");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UserClientAccessEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Users.UserClientAccessEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -503,7 +509,7 @@ internal static class InitialModel
             b.ToTable("UserClientAccesses");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UserEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Users.UserEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -541,7 +547,7 @@ internal static class InitialModel
             b.ToTable("Users");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UserGroupAccessEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Users.UserGroupAccessEntity", b =>
         {
             b.Property<string>("Id")
                 .HasColumnType("TEXT");
@@ -572,9 +578,9 @@ internal static class InitialModel
     /// <param name="modelBuilder">Построитель модели.</param>
     private static void BuildRelationships(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientBlockHistoryEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientBlockHistoryEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.ClientEntity", "Client")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Clients.ClientEntity", "Client")
                 .WithMany("BlockHistory")
                 .HasForeignKey("ClientId")
                 .OnDelete(DeleteBehavior.Cascade)
@@ -583,20 +589,20 @@ internal static class InitialModel
             b.Navigation("Client");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientComputerInfoEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientComputerInfoEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.ClientEntity", "Client")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Clients.ClientEntity", "Client")
                 .WithOne("ComputerInfo")
-                .HasForeignKey("UpdateHub.BackendServer.Domain.Entities.ClientComputerInfoEntity", "ClientId")
+                .HasForeignKey("UpdateHub.BackendServer.Domain.Entities.Clients.ClientComputerInfoEntity", "ClientId")
                 .OnDelete(DeleteBehavior.Cascade)
                 .IsRequired();
 
             b.Navigation("Client");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.GroupEntity", "Group")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Groups.GroupEntity", "Group")
                 .WithMany("Clients")
                 .HasForeignKey("GroupId")
                 .OnDelete(DeleteBehavior.SetNull);
@@ -604,9 +610,9 @@ internal static class InitialModel
             b.Navigation("Group");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientHistoryEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientHistoryEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.ClientEntity", "Client")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Clients.ClientEntity", "Client")
                 .WithMany("History")
                 .HasForeignKey("ClientId")
                 .OnDelete(DeleteBehavior.Cascade)
@@ -615,9 +621,9 @@ internal static class InitialModel
             b.Navigation("Client");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientNetworkInfoEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientNetworkInfoEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.ClientEntity", "Client")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Clients.ClientEntity", "Client")
                 .WithMany("NetworkInfos")
                 .HasForeignKey("ClientId")
                 .OnDelete(DeleteBehavior.Cascade)
@@ -626,9 +632,9 @@ internal static class InitialModel
             b.Navigation("Client");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.FileChangeEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Manifest.FileChangeEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.ManifestEntryEntity", "ManifestEntry")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Manifest.ManifestEntryEntity", "ManifestEntry")
                 .WithMany("FileChanges")
                 .HasForeignKey("ManifestEntryId")
                 .OnDelete(DeleteBehavior.SetNull);
@@ -636,9 +642,9 @@ internal static class InitialModel
             b.Navigation("ManifestEntry");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.RefreshTokenEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Users.RefreshTokenEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.UserEntity", "User")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Users.UserEntity", "User")
                 .WithMany("RefreshTokens")
                 .HasForeignKey("UserId")
                 .OnDelete(DeleteBehavior.Cascade)
@@ -647,14 +653,14 @@ internal static class InitialModel
             b.Navigation("User");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UpdateDetailEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Updates.UpdateDetailEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.ManifestEntryEntity", "ManifestEntry")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Manifest.ManifestEntryEntity", "ManifestEntry")
                 .WithMany("UpdateDetails")
                 .HasForeignKey("ManifestEntryId")
                 .OnDelete(DeleteBehavior.SetNull);
 
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.UpdateRequestEntity", "UpdateRequest")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Updates.UpdateRequestEntity", "UpdateRequest")
                 .WithMany("UpdateDetails")
                 .HasForeignKey("UpdateRequestId")
                 .OnDelete(DeleteBehavior.Cascade)
@@ -665,9 +671,9 @@ internal static class InitialModel
             b.Navigation("UpdateRequest");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UpdateRequestEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Updates.UpdateRequestEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.ClientEntity", "Client")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Clients.ClientEntity", "Client")
                 .WithMany("UpdateRequests")
                 .HasForeignKey("ClientId")
                 .OnDelete(DeleteBehavior.Cascade)
@@ -676,15 +682,15 @@ internal static class InitialModel
             b.Navigation("Client");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UserClientAccessEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Users.UserClientAccessEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.ClientEntity", "Client")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Clients.ClientEntity", "Client")
                 .WithMany("UserClientAccesses")
                 .HasForeignKey("ClientId")
                 .OnDelete(DeleteBehavior.Cascade)
                 .IsRequired();
 
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.UserEntity", "User")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Users.UserEntity", "User")
                 .WithMany("UserClientAccesses")
                 .HasForeignKey("UserId")
                 .OnDelete(DeleteBehavior.Cascade)
@@ -695,15 +701,15 @@ internal static class InitialModel
             b.Navigation("User");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UserGroupAccessEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Users.UserGroupAccessEntity", b =>
         {
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.GroupEntity", "Group")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Groups.GroupEntity", "Group")
                 .WithMany("UserGroupAccesses")
                 .HasForeignKey("GroupId")
                 .OnDelete(DeleteBehavior.Cascade)
                 .IsRequired();
 
-            b.HasOne("UpdateHub.BackendServer.Domain.Entities.UserEntity", "User")
+            b.HasOne("UpdateHub.BackendServer.Domain.Entities.Users.UserEntity", "User")
                 .WithMany("UserGroupAccesses")
                 .HasForeignKey("UserId")
                 .OnDelete(DeleteBehavior.Cascade)
@@ -719,7 +725,7 @@ internal static class InitialModel
     /// <param name="modelBuilder">Построитель модели.</param>
     private static void BuildNavigations(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ClientEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Clients.ClientEntity", b =>
         {
             b.Navigation("BlockHistory");
 
@@ -734,26 +740,26 @@ internal static class InitialModel
             b.Navigation("UserClientAccesses");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.GroupEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Groups.GroupEntity", b =>
         {
             b.Navigation("Clients");
 
             b.Navigation("UserGroupAccesses");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.ManifestEntryEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Manifest.ManifestEntryEntity", b =>
         {
             b.Navigation("FileChanges");
 
             b.Navigation("UpdateDetails");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UpdateRequestEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Updates.UpdateRequestEntity", b =>
         {
             b.Navigation("UpdateDetails");
         });
 
-        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.UserEntity", b =>
+        modelBuilder.Entity("UpdateHub.BackendServer.Domain.Entities.Users.UserEntity", b =>
         {
             b.Navigation("RefreshTokens");
 

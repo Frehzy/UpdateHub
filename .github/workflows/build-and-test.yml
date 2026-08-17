@@ -29,8 +29,12 @@ jobs:
       - name: Восстановление пакетов
         run: dotnet restore UpdateHub.slnx
 
+      # Ключ -warnaserror включён только здесь, а не в файлах проектов:
+      # во время правки кода незаконченный фрагмент почти всегда даёт
+      # предупреждения, и падающая сборка в студии мешала бы работать.
+      # В master при этом ничего с новыми предупреждениями не попадёт.
       - name: Сборка
-        run: dotnet build UpdateHub.slnx --configuration Release --no-restore
+        run: dotnet build UpdateHub.slnx --configuration Release --no-restore -warnaserror
 
       # Способ запуска тестов задан в dotnet.config: xunit.v3 работает поверх
       # Microsoft.Testing.Platform, а `dotnet test` на .NET 10 без этой настройки

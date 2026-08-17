@@ -29,6 +29,12 @@ FILES_DIR = $(CURDIR)/files
 # блокировки файлов через 9p/virtiofs работают неправильно и портят базу SQLite.
 DATA_VOLUME = updatehub-data
 
+# Каталог резервных копий базы. В отличие от самой базы, это обычная папка
+# Windows: смысл копии в том, чтобы пережить потерю тома, и лежать с ним
+# рядом она не должна. Копии пишутся целиком командой SQLite, поэтому
+# блокировки файлов здесь ни при чём.
+BACKUP_DIR = $(CURDIR)/backup
+
 # Журнал контейнера ограничен по размеру: драйвер json-file по умолчанию
 # растёт без предела, а сервер работает годами, и к нему не ходят.
 #
@@ -57,7 +63,7 @@ run:
 		echo "  make run JWT_SECRET=\"$$(openssl rand -base64 48)\""; \
 		exit 1; \
 	fi
-	@mkdir -p "$(FILES_DIR)"
+	@mkdir -p "$(FILES_DIR)" "$(BACKUP_DIR)"
 	docker volume create $(DATA_VOLUME) >/dev/null
 	docker run -d \
 		--name $(CONTAINER_NAME) \
@@ -65,10 +71,12 @@ run:
 		-p $(PORT):8080 \
 		-v "$(FILES_DIR)":/app/files:ro \
 		-v $(DATA_VOLUME):/app/data \
+		-v "$(BACKUP_DIR)":/app/backup \
 		-e ASPNETCORE_ENVIRONMENT=Production \
 		-e Jwt__SecretKey="$(JWT_SECRET)" \
 		-e UpdateHub__FilesPath=/app/files \
 		-e UpdateHub__DatabasePath=/app/data/updatehub.db \
+		-e UpdateHub__BackupPath=/app/backup \
 		--log-opt max-size=10m \
 		--log-opt max-file=5 \
 		--restart unless-stopped \

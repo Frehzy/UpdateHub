@@ -1,7 +1,8 @@
 using Microsoft.Extensions.Options;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using UpdateHub.BackendServer.Domain.Entities;
+using UpdateHub.BackendServer.Domain.Entities.Users;
+using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.BackendServer.Infrastructure.Security;
 using UpdateHub.Shared.Enums;
 

@@ -1,11 +1,27 @@
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using AutoMapper;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Clients;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Enrollments;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Users;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories;
-using UpdateHub.BackendServer.Application.Abstractions.Services;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Clients;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Enrollments;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Groups;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Manifest;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Updates;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Users;
 using UpdateHub.BackendServer.Application.Manifest;
 using UpdateHub.BackendServer.Application.Sync;
-using UpdateHub.Shared.Contracts;
+using UpdateHub.BackendServer.Domain.Enums;
+using UpdateHub.Shared.Contracts.Clients;
+using UpdateHub.Shared.Contracts.Common;
+using UpdateHub.Shared.Contracts.Enrollments;
+using UpdateHub.Shared.Contracts.Groups;
+using UpdateHub.BackendServer.Application.BackgroundServices;
+using UpdateHub.Shared.Contracts.Maintenance;
+using UpdateHub.Shared.Contracts.Manifest;
+using UpdateHub.Shared.Contracts.Users;
 using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.BackendServer.Api.V1.Controllers;
@@ -39,6 +55,7 @@ public class AdminController(
     IGroupService groupService,
     IAuthService authService,
     IStatisticsService statisticsService,
+    BackupBackgroundService backupService,
     IEnrollmentService enrollmentService,
     IManifestScanService manifestScanService,
     ManifestState manifestState,
@@ -497,4 +514,51 @@ public class AdminController(
     [HttpGet("stats")]
     public async Task<IActionResult> GetStats([FromQuery] int? days, CancellationToken cancellationToken)
         => Ok(await statisticsService.GetStatisticsAsync(days, cancellationToken));
+
+    /// <summary>
+    /// Возвращает компьютеры, давно не выходившие на связь.
+    /// </summary>
+    /// <param name="days">Порог в сутках; если не указан, берётся из настроек.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список компьютеров, начиная с самых давних.</returns>
+    /// <remarks>
+    /// Отвечает на вопрос, который администратор задаёт каждое утро: какие
+    /// машины перестали обновляться. Сводка обращений на него не отвечает —
+    /// она показывает итог по всем, а молчащий компьютер в итоге незаметен.
+    /// </remarks>
+    [HttpGet("clients/stale")]
+    public async Task<IActionResult> GetStaleClients([FromQuery] int? days, CancellationToken cancellationToken)
+        => Ok(await statisticsService.GetStaleClientsAsync(days, cancellationToken));
+
+    /// <summary>
+    /// Снимает резервную копию базы данных по требованию.
+    /// </summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Путь и размер снятой копии.</returns>
+    /// <remarks>
+    /// Копии снимаются и по расписанию. Кнопка нужна перед тем, как что-то
+    /// менять руками: ждать до ночи в такой момент неразумно.
+    /// </remarks>
+    [HttpPost("backup")]
+    public async Task<IActionResult> CreateBackup(CancellationToken cancellationToken)
+    {
+        var path = await backupService.CreateBackupAsync(cancellationToken);
+
+        if (path is null)
+        {
+            return Ok(new BackupResultDto
+            {
+                Created = false,
+                Message = "Копию снять не удалось. Подробности в журнале сервера"
+            });
+        }
+
+        return Ok(new BackupResultDto
+        {
+            Created = true,
+            Path = path,
+            SizeBytes = new FileInfo(path).Length,
+            Message = "Копия снята"
+        });
+    }
 }

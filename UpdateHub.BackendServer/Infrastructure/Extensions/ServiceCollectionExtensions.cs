@@ -3,12 +3,34 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Clients;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Enrollments;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Groups;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Manifest;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Updates;
+using UpdateHub.BackendServer.Application.Abstractions.Repositories.Users;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories;
-using UpdateHub.BackendServer.Application.Abstractions.Services;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Clients;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Enrollments;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Groups;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Manifest;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Updates;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Users;
 using UpdateHub.BackendServer.Application.BackgroundServices;
 using UpdateHub.BackendServer.Application.Manifest;
+using UpdateHub.BackendServer.Application.Repositories.Clients;
+using UpdateHub.BackendServer.Application.Repositories.Enrollments;
+using UpdateHub.BackendServer.Application.Repositories.Groups;
+using UpdateHub.BackendServer.Application.Repositories.Manifest;
+using UpdateHub.BackendServer.Application.Repositories.Updates;
+using UpdateHub.BackendServer.Application.Repositories.Users;
 using UpdateHub.BackendServer.Application.Repositories;
-using UpdateHub.BackendServer.Application.Services;
+using UpdateHub.BackendServer.Application.Services.Clients;
+using UpdateHub.BackendServer.Application.Services.Enrollments;
+using UpdateHub.BackendServer.Application.Services.Groups;
+using UpdateHub.BackendServer.Application.Services.Manifest;
+using UpdateHub.BackendServer.Application.Services.Updates;
+using UpdateHub.BackendServer.Application.Services.Users;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 using UpdateHub.BackendServer.Infrastructure.Database;
 using UpdateHub.BackendServer.Infrastructure.Security;
@@ -112,6 +134,11 @@ public static class ServiceCollectionExtensions
 
         services.AddHostedService<ManifestScanBackgroundService>();
         services.AddHostedService<CleanupBackgroundService>();
+        // Служба копий заводится единственным экземпляром и уже он
+        // отдаётся фоновой задаче: администратор снимает копию кнопкой,
+        // не дожидаясь расписания, и это должна быть та же служба.
+        services.AddSingleton<BackupBackgroundService>();
+        services.AddHostedService(provider => provider.GetRequiredService<BackupBackgroundService>());
 
         return services;
     }

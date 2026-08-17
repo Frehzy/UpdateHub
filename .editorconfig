@@ -1,0 +1,88 @@
+# Единый стиль оформления кода.
+#
+# Прежде он держался только на договорённости, и её приходилось повторять
+# в каждой правке. Теперь его знают и Visual Studio, и Rider, и `dotnet format`.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json,md}]
+indent_size = 2
+
+# Сценарии оболочки требуют перевода строки в стиле Unix: с CRLF ядро
+# не находит интерпретатор и отвечает «bad interpreter: /usr/bin/env^M».
+[*.{sh,py}]
+end_of_line = lf
+
+[UpdateHub.Client/updatehub]
+end_of_line = lf
+
+[Makefile]
+indent_style = tab
+end_of_line = lf
+
+[*.cs]
+indent_size = 4
+
+# ---------- Порядок using ----------
+
+# System в начало не выносится: при обычном алфавитном порядке получается
+# Microsoft, затем System, затем UpdateHub — тот порядок, в котором написан
+# весь код проекта.
+dotnet_sort_system_directives_first = false
+dotnet_separate_import_directive_groups = false
+
+# Директивы using стоят снаружи пространства имён — так написан весь код.
+csharp_using_directive_placement = outside_namespace:warning
+
+# ---------- Язык ----------
+
+# Пространство имён одной строкой: в проекте один тип на файл, и лишний
+# уровень отступа ничего не даёт.
+csharp_style_namespace_declarations = file_scoped:warning
+
+csharp_style_var_for_built_in_types = false:silent
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:silent
+
+csharp_prefer_braces = true:warning
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+
+dotnet_style_prefer_collection_expression = true:suggestion
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+
+# ---------- Именование ----------
+
+dotnet_naming_rule.private_fields_with_underscore.severity = suggestion
+dotnet_naming_rule.private_fields_with_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_with_underscore.style = underscore_prefix
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+dotnet_naming_style.underscore_prefix.required_prefix = _
+dotnet_naming_style.underscore_prefix.capitalization = camel_case
+
+# ---------- Проверки ----------
+
+# Пространство имён обязано совпадать с папкой. Правило включено осознанно:
+# именно ради него файлы разложены по подпапкам, и рассогласование должно
+# быть заметно сразу, а не через полгода.
+dotnet_diagnostic.IDE0130.severity = warning
+
+[*.{razor,cshtml}]
+indent_size = 4
+
+# Разметка компонентов порождает код автоматически, и требовать для него
+# XML-комментарии бессмысленно.
+dotnet_diagnostic.CS1591.severity = none

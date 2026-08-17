@@ -1,4 +1,33 @@
 <Solution>
+  <Folder Name="/Client/">
+    <File Path="UpdateHub.Client/README.md" />
+    <File Path="UpdateHub.Client/install.sh" />
+    <File Path="UpdateHub.Client/updatehub" />
+    <File Path="UpdateHub.Client/etc/updatehub.conf.example" />
+    <File Path="UpdateHub.Client/lib/auth.sh" />
+    <File Path="UpdateHub.Client/lib/commands.sh" />
+    <File Path="UpdateHub.Client/lib/common.sh" />
+    <File Path="UpdateHub.Client/lib/config.sh" />
+    <File Path="UpdateHub.Client/lib/download.sh" />
+    <File Path="UpdateHub.Client/lib/http.sh" />
+    <File Path="UpdateHub.Client/lib/identity.sh" />
+    <File Path="UpdateHub.Client/lib/manifest.sh" />
+    <File Path="UpdateHub.Client/systemd/updatehub.service" />
+    <File Path="UpdateHub.Client/systemd/updatehub.timer" />
+    <File Path="UpdateHub.Client/tests/fake-server.py" />
+    <File Path="UpdateHub.Client/tests/run-tests.sh" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".dockerignore" />
+    <File Path=".editorconfig" />
+    <File Path=".github/workflows/build-and-test.yml" />
+    <File Path="Directory.Build.props" />
+    <File Path="Dockerfile" />
+    <File Path="Makefile" />
+    <File Path="README.md" />
+    <File Path="dotnet.config" />
+    <File Path="docs/proverka-v-docker.md" />
+  </Folder>
   <Folder Name="/BackendServer/">
     <Project Path="UpdateHub.Backend.Tests/UpdateHub.Backend.Tests.csproj" Id="7f3029b8-ad8a-4973-8eb7-30950425b1ed" />
     <Project Path="UpdateHub.BackendServer/UpdateHub.BackendServer.csproj" />

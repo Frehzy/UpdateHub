@@ -1,6 +1,12 @@
 using AutoMapper;
-using UpdateHub.BackendServer.Domain.Entities;
-using UpdateHub.Shared.Contracts;
+using UpdateHub.BackendServer.Domain.Entities.Clients;
+using UpdateHub.BackendServer.Domain.Entities.Enrollments;
+using UpdateHub.BackendServer.Domain.Entities.Groups;
+using UpdateHub.BackendServer.Domain.Entities.Users;
+using UpdateHub.Shared.Contracts.Clients;
+using UpdateHub.Shared.Contracts.Enrollments;
+using UpdateHub.Shared.Contracts.Groups;
+using UpdateHub.Shared.Contracts.Users;
 
 namespace UpdateHub.BackendServer.Api.V1.Mappers;
 

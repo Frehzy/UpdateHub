@@ -1,8 +1,9 @@
-using UpdateHub.BackendServer.Application.Abstractions.Services;
+using UpdateHub.BackendServer.Application.Abstractions.Services.Clients;
+using UpdateHub.BackendServer.Application.Services.Clients;
 using UpdateHub.BackendServer.Application.Sync;
-using UpdateHub.BackendServer.Domain.Entities;
+using UpdateHub.BackendServer.Domain.Entities.Clients;
 using UpdateHub.BackendServer.Domain.Enums;
-using UpdateHub.Shared.Contracts;
+using UpdateHub.Shared.Contracts.Clients;
 
 namespace UpdateHub.Backend.Tests.TestSupport;
 

@@ -1,10 +1,24 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+
+    <!--
+      xunit.v3 работает поверх Microsoft.Testing.Platform. На .NET 10 команда
+      `dotnet test` без этого свойства идёт прежним путём через VSTest, который
+      платформа больше не поддерживает, и сборка падает ещё до запуска тестов.
+      В Visual Studio это незаметно: она запускает тесты своим средством.
+    -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+
+    <!--
+      xUnit1051 требует передавать TestContext.Current.CancellationToken в каждый
+      вызов, который принимает токен отмены. Смысл правила — чтобы прерванный
+      тест переставал работать сразу. Здесь это не окупается: самый долгий тест
+      идёт восемь секунд, общего ограничения по времени нет, а параметр пришлось
+      бы дописать в двести строк, где он ничего не меняет.
+    -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

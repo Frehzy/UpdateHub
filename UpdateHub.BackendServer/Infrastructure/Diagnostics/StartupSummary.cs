@@ -1,9 +1,9 @@
-using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.Extensions.Options;
-using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Net;
 using System.Text;
 using UpdateHub.BackendServer.Application.Manifest;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
