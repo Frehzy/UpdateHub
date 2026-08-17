@@ -7,7 +7,13 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Сначала только файлы проектов: пока они не менялись, docker берёт слой
+# Общие настройки сборки обязаны попасть внутрь раньше проектов: версия
+# платформы задана только здесь, в файлах проектов её нет. Без этого файла
+# у панели управления не остаётся TargetFramework, и обрезка сборок падает
+# с NETSDK1124 ещё на восстановлении пакетов.
+COPY Directory.Build.props ./
+
+# Затем только файлы проектов: пока они не менялись, docker берёт слой
 # с восстановленными пакетами из кэша, а не тянет их заново.
 COPY UpdateHub.BackendServer/UpdateHub.BackendServer.csproj UpdateHub.BackendServer/
 COPY UpdateHub.Shared/UpdateHub.Shared.csproj UpdateHub.Shared/

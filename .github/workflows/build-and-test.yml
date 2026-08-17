@@ -36,13 +36,22 @@ jobs:
       - name: Сборка
         run: dotnet build UpdateHub.slnx --configuration Release --no-restore -warnaserror
 
-      # Способ запуска тестов задан в dotnet.config: xunit.v3 работает поверх
-      # Microsoft.Testing.Platform, а `dotnet test` на .NET 10 без этой настройки
-      # идёт прежним путём через VSTest и отказывается работать. Ключ
-      # --verbosity здесь не указан намеренно: у нового запуска свой набор
-      # ключей, и лишний привёл бы к отказу разобрать командную строку.
+      # Тесты запускаются напрямую, а не через `dotnet test`.
+      #
+      # xunit.v3 работает поверх Microsoft.Testing.Platform, а `dotnet test`
+      # на .NET 10 SDK всё равно идёт прежним путём через VSTest, который эта
+      # платформа больше не поддерживает: запуск падает с «Testing with VSTest
+      # target is no longer supported by Microsoft.Testing.Platform». Настройка
+      # в dotnet.config эту развилку не снимает — проверено на SDK 10.0.400.
+      #
+      # Обходить её и не нужно: тестовый проект xunit.v3 — не библиотека,
+      # а обычное консольное приложение со своим запуском внутри. Его
+      # достаточно позвать, и код возврата уже означает исход прогона.
+      # В Visual Studio ничего не меняется: она запускает тесты своим средством.
       - name: Тесты
-        run: dotnet test UpdateHub.slnx --configuration Release --no-build
+        run: |
+          dotnet UpdateHub.Backend.Tests/bin/Release/net10.0/UpdateHub.Backend.Tests.dll
+          dotnet UpdateHub.Frontend.Tests/bin/Release/net10.0/UpdateHub.Frontend.Tests.dll
 
   client:
     name: Клиент на bash
