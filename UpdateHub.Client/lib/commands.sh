@@ -63,7 +63,9 @@ run_sync() {
 
     local own_count unsupported
     own_count="$(wc -l <"$manifest_file" | tr -d ' ')"
-    unsupported="$(grep -c '^\\' "$manifest_file" 2>/dev/null || true)"
+    # Скобочное выражение вместо экранирования: обратный слэш внутри скобок
+    # значит сам себя, и читать такой шаблон проще.
+    unsupported="$(grep -c '^[\]' "$manifest_file" 2>/dev/null || true)"
     log_info "Своих файлов: $own_count"
 
     if [ "${unsupported:-0}" -gt 0 ]; then
