@@ -1,5 +1,4 @@
 using UpdateHub.BackendServer.Domain.Enums;
-using UpdateHub.BackendServer.Domain.ValueObjects;
 
 namespace UpdateHub.BackendServer.Domain.Entities.Manifest;
 

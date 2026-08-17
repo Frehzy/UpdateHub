@@ -1,8 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using System.Net.Http.Headers;
 using System.Net;
+using System.Net.Http.Headers;
 using UpdateHub.Backend.Tests.TestSupport;
-using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Backend.Tests.Api.V1.Controllers;

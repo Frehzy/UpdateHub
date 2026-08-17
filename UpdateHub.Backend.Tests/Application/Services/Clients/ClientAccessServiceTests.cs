@@ -2,13 +2,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using UpdateHub.Backend.Tests.TestSupport;
 using UpdateHub.BackendServer.Application.Repositories.Clients;
 using UpdateHub.BackendServer.Application.Repositories.Users;
-using UpdateHub.BackendServer.Application.Repositories;
 using UpdateHub.BackendServer.Application.Services.Clients;
 using UpdateHub.BackendServer.Application.Sync;
 using UpdateHub.BackendServer.Domain.Entities.Clients;
 using UpdateHub.BackendServer.Domain.Entities.Groups;
 using UpdateHub.BackendServer.Domain.Entities.Users;
-using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Backend.Tests.Application.Services.Clients;

@@ -1,12 +1,10 @@
 using Microsoft.Extensions.Options;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Clients;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Updates;
-using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Updates;
 using UpdateHub.BackendServer.Application.Sync;
 using UpdateHub.BackendServer.Domain.Entities.Updates;
 using UpdateHub.BackendServer.Domain.Enums;
-using UpdateHub.BackendServer.Domain.ValueObjects;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 using UpdateHub.Shared.Contracts.Clients;
 using UpdateHub.Shared.Contracts.Statistics;

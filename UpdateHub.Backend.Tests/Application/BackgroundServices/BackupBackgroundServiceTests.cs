@@ -2,11 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using UpdateHub.Backend.Tests.TestSupport;
 using UpdateHub.BackendServer.Application.BackgroundServices;
 using UpdateHub.BackendServer.Domain.Entities.Users;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 using UpdateHub.BackendServer.Infrastructure.Database;
-using UpdateHub.Backend.Tests.TestSupport;
 using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Backend.Tests.Application.BackgroundServices;

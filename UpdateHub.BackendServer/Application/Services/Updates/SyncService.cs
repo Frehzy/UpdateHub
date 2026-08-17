@@ -1,10 +1,8 @@
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Manifest;
-using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Updates;
 using UpdateHub.BackendServer.Application.Manifest;
 using UpdateHub.BackendServer.Application.Sync;
 using UpdateHub.BackendServer.Domain.Enums;
-using UpdateHub.BackendServer.Domain.ValueObjects;
 
 namespace UpdateHub.BackendServer.Application.Services.Updates;
 

@@ -1,5 +1,4 @@
 using UpdateHub.BackendServer.Application.Abstractions.Services.Clients;
-using UpdateHub.BackendServer.Application.Services.Clients;
 using UpdateHub.BackendServer.Application.Sync;
 using UpdateHub.BackendServer.Domain.Entities.Clients;
 using UpdateHub.BackendServer.Domain.Enums;

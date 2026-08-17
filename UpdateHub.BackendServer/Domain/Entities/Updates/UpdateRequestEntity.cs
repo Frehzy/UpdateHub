@@ -1,4 +1,3 @@
-using UpdateHub.BackendServer.Application.Services.Updates;
 using UpdateHub.BackendServer.Domain.Entities.Clients;
 using UpdateHub.BackendServer.Domain.Enums;
 

@@ -1,9 +1,8 @@
-using System.Net.Http.Json;
 using System.Net;
-using System.Text.Json;
+using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using UpdateHub.Backend.Tests.TestSupport;
-using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Backend.Tests.Api.V1.Controllers;

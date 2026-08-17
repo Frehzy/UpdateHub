@@ -1,7 +1,6 @@
 using AutoMapper;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Clients;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Groups;
-using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Clients;
 using UpdateHub.BackendServer.Application.Sync;
 using UpdateHub.BackendServer.Domain.Entities.Clients;

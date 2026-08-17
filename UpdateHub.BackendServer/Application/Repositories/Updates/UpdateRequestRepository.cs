@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Updates;
-using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Domain.Entities.Updates;
 using UpdateHub.BackendServer.Infrastructure.Database;
 

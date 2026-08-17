@@ -1,11 +1,9 @@
 using Microsoft.Extensions.Options;
 using System.Text;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Manifest;
-using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Manifest;
 using UpdateHub.BackendServer.Application.Manifest;
 using UpdateHub.BackendServer.Domain.Entities.Manifest;
-using UpdateHub.BackendServer.Domain.ValueObjects;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 
 namespace UpdateHub.BackendServer.Application.Services.Manifest;

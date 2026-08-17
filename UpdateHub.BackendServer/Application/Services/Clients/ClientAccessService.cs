@@ -1,6 +1,5 @@
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Clients;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Users;
-using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Clients;
 using UpdateHub.BackendServer.Application.Sync;
 

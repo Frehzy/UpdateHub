@@ -3,10 +3,8 @@ using Microsoft.Extensions.Options;
 using UpdateHub.Backend.Tests.TestSupport;
 using UpdateHub.BackendServer.Application.Manifest;
 using UpdateHub.BackendServer.Application.Repositories.Manifest;
-using UpdateHub.BackendServer.Application.Repositories;
 using UpdateHub.BackendServer.Application.Services.Manifest;
 using UpdateHub.BackendServer.Domain.Enums;
-using UpdateHub.BackendServer.Domain.ValueObjects;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 
 namespace UpdateHub.Backend.Tests.Application.Services.Manifest;

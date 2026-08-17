@@ -1,7 +1,6 @@
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Clients;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Enrollments;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Groups;
-using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Clients;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Enrollments;
 using UpdateHub.BackendServer.Application.Sync;

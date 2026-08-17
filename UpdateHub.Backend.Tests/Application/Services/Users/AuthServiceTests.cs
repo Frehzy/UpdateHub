@@ -3,7 +3,6 @@ using Microsoft.Extensions.Options;
 using UpdateHub.Backend.Tests.TestSupport;
 using UpdateHub.BackendServer.Application.Repositories.Clients;
 using UpdateHub.BackendServer.Application.Repositories.Users;
-using UpdateHub.BackendServer.Application.Repositories;
 using UpdateHub.BackendServer.Application.Services.Clients;
 using UpdateHub.BackendServer.Application.Services.Users;
 using UpdateHub.BackendServer.Application.Sync;

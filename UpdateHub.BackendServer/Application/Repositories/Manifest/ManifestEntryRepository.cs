@@ -1,8 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Manifest;
-using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Domain.Entities.Manifest;
-using UpdateHub.BackendServer.Domain.ValueObjects;
 using UpdateHub.BackendServer.Infrastructure.Database;
 
 namespace UpdateHub.BackendServer.Application.Repositories.Manifest;

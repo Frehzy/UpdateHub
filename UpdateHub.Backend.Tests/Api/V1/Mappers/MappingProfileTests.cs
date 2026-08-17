@@ -1,11 +1,10 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using AutoMapper;
+using Microsoft.Extensions.Logging.Abstractions;
 using UpdateHub.BackendServer.Api.V1.Mappers;
 using UpdateHub.BackendServer.Domain.Entities.Clients;
 using UpdateHub.BackendServer.Domain.Entities.Enrollments;
 using UpdateHub.BackendServer.Domain.Entities.Groups;
 using UpdateHub.BackendServer.Domain.Entities.Users;
-using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.Shared.Contracts.Clients;
 using UpdateHub.Shared.Contracts.Enrollments;
 using UpdateHub.Shared.Contracts.Groups;

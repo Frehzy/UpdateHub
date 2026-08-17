@@ -1,8 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Users;
-using UpdateHub.BackendServer.Application.Abstractions.Repositories;
 using UpdateHub.BackendServer.Domain.Entities.Users;
-using UpdateHub.BackendServer.Domain.Enums;
 using UpdateHub.BackendServer.Infrastructure.Database;
 using UpdateHub.Shared.Enums;
 
