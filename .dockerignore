@@ -34,6 +34,9 @@ README.md
 **/data
 **/*.tar
 
-# Тесты в образ не входят: они выполняются на машине сборки.
-UpdateHub.Tests
+# В образ не входят: тесты выполняются на машине сборки, клиент едет
+# на машины отдельно, документация нужна человеку, а не контейнеру.
+UpdateHub.Backend.Tests
+UpdateHub.Frontend.Tests
+UpdateHub.Client
 docs
