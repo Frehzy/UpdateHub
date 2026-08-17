@@ -481,6 +481,48 @@ public class AdminControllerTests(UpdateHubApplication application)
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    /// <summary>
+    /// Состояние обслуживания показывает расписание копий и место на дисках.
+    /// </summary>
+    /// <remarks>
+    /// Отвечает на вопрос «работает ли копирование», который иначе требовал бы
+    /// заглянуть в папку на сервере. Проверяется, что настройки расписания
+    /// доезжают до ответа и что место на дисках определяется: возвращать здесь
+    /// пустое значение было бы так же бесполезно, как не отвечать вовсе.
+    /// </remarks>
+    [Fact]
+    public async Task Maintenance_ReportsScheduleAndDiskSpace()
+    {
+        using var client = await application.CreateAdminClientAsync();
+
+        var response = await client.GetAsync("/api/v1/admin/maintenance");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(24, payload.GetProperty("intervalHours").GetInt32());
+        Assert.Equal(7, payload.GetProperty("keepCount").GetInt32());
+        Assert.NotEmpty(payload.GetProperty("backupPath").GetString()!);
+
+        // Место на диске обязано определиться: возвращать здесь пустое значение
+        // так же бесполезно, как не отвечать вовсе.
+        Assert.True(payload.GetProperty("backupTotalBytes").GetInt64() > 0);
+    }
+
+    /// <summary>Состояние обслуживания обычному пользователю недоступно.</summary>
+    /// <remarks>
+    /// Свободное место на дисках сервера и пути к его каталогам — сведения
+    /// о хозяйстве, которые обычному пользователю знать незачем.
+    /// </remarks>
+    [Fact]
+    public async Task Maintenance_OrdinaryUser_Forbidden()
+    {
+        using var client = await CreateOrdinaryUserClientAsync();
+
+        var response = await client.GetAsync("/api/v1/admin/maintenance");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     /// <summary>Состояние манифеста доступно администратору.</summary>
     [Fact]
     public async Task ManifestStatus_ReturnsGenerationAndCount()

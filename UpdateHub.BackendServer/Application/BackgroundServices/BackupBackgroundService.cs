@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using UpdateHub.BackendServer.Application.Maintenance;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 using UpdateHub.BackendServer.Infrastructure.Database;
 
@@ -27,10 +28,12 @@ namespace UpdateHub.BackendServer.Application.BackgroundServices;
 /// </remarks>
 /// <param name="scopeFactory">Фабрика областей: контекст базы живёт в области запроса.</param>
 /// <param name="config">Настройки.</param>
+/// <param name="state">Состояние копирования для панели управления.</param>
 /// <param name="logger">Журнал.</param>
 public class BackupBackgroundService(
     IServiceScopeFactory scopeFactory,
     IOptions<UpdateHubConfig> config,
+    BackupState state,
     ILogger<BackupBackgroundService> logger) : BackgroundService
 {
     private readonly UpdateHubConfig _config = config.Value;
@@ -110,6 +113,8 @@ public class BackupBackgroundService(
             var size = new FileInfo(path).Length;
             logger.LogInformation("Снята резервная копия базы: {Path} ({Size} байт)", path, size);
 
+            state.Succeeded(path, size);
+
             RemoveOutdated(directory);
             return path;
         }
@@ -120,7 +125,11 @@ public class BackupBackgroundService(
         catch (Exception ex)
         {
             // Неудачная копия не должна ронять сервер: раздача файлов важнее.
+            // Но и пропасть молча она не должна — иначе отказ обнаружится
+            // тогда, когда копия понадобится, то есть слишком поздно.
             logger.LogError(ex, "Не удалось снять резервную копию базы");
+            state.Failed(ex.Message);
+
             return null;
         }
     }

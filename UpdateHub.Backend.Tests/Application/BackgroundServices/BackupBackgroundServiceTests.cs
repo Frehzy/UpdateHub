@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using UpdateHub.Backend.Tests.TestSupport;
 using UpdateHub.BackendServer.Application.BackgroundServices;
+using UpdateHub.BackendServer.Application.Maintenance;
 using UpdateHub.BackendServer.Domain.Entities.Clients;
 using UpdateHub.BackendServer.Domain.Entities.Groups;
 using UpdateHub.BackendServer.Domain.Entities.Users;
@@ -49,8 +50,16 @@ public class BackupBackgroundServiceTests : IDisposable
                 BackupKeepCount = keepCount,
                 BackupIntervalHours = intervalHours
             }),
+            State,
             NullLogger<BackupBackgroundService>.Instance);
     }
+
+    /// <summary>Состояние копирования, которое заполняет служба.</summary>
+    /// <remarks>
+    /// Поле, а не локальная переменная: часть проверок смотрит, что именно
+    /// служба записала в состояние после попытки.
+    /// </remarks>
+    private BackupState State { get; } = new();
 
     /// <summary>Открывает снятую копию как обычную базу.</summary>
     /// <param name="path">Путь к файлу копии.</param>
@@ -273,6 +282,61 @@ public class BackupBackgroundServiceTests : IDisposable
         await service.StopAsync(CancellationToken.None);
 
         Assert.False(Directory.Exists(_backupDirectory));
+    }
+
+    /// <summary>
+    /// Удачная попытка попадает в состояние: время, путь и размер.
+    /// </summary>
+    /// <remarks>
+    /// По этому состоянию панель показывает, когда копия получилась в последний
+    /// раз. Без него узнать о работе копирования можно было только заглянув
+    /// в папку на сервере.
+    /// </remarks>
+    [Fact]
+    public async Task CreateBackupAsync_RecordsSuccessInState()
+    {
+        await SeedAsync();
+
+        var path = await CreateService().CreateBackupAsync();
+
+        Assert.NotNull(State.LastSuccess);
+        Assert.True(State.LastSuccess.Succeeded);
+        Assert.Equal(path, State.LastSuccess.Path);
+        Assert.True(State.LastSuccess.SizeBytes > 0);
+        Assert.Equal(1, State.SuccessCount);
+        Assert.Equal(0, State.FailureCount);
+    }
+
+    /// <summary>
+    /// Неудачная попытка тоже попадает в состояние, вместе с причиной.
+    /// </summary>
+    /// <remarks>
+    /// Это главный случай, ради которого состояние и заведено: служба намеренно
+    /// не роняет сервер при неудаче — раздача файлов важнее копий, — и без такой
+    /// записи отказ остался бы только в журнале, который никто не читает.
+    /// <para>
+    /// Отказ получается подстановкой в настройки пути, по которому уже лежит
+    /// файл: создать каталог с тем же именем нельзя ни в Windows, ни в Linux.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task CreateBackupAsync_FailedAttempt_RecordedInState()
+    {
+        await SeedAsync();
+        Directory.CreateDirectory(_backupDirectory);
+
+        var occupied = Path.Combine(_backupDirectory, "zanyato");
+        await File.WriteAllTextAsync(occupied, "это файл, а не каталог");
+
+        var path = await CreateService(backupPath: occupied).CreateBackupAsync();
+
+        Assert.Null(path);
+        Assert.Null(State.LastSuccess);
+
+        Assert.NotNull(State.Last);
+        Assert.False(State.Last.Succeeded);
+        Assert.NotNull(State.Last.Error);
+        Assert.Equal(1, State.FailureCount);
     }
 
     /// <summary>Убирает базу и каталог копий.</summary>

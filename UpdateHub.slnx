@@ -7,5 +7,36 @@
     <Project Path="UpdateHub.Frontend.Tests/UpdateHub.Frontend.Tests.csproj" />
     <Project Path="UpdateHub.FrontendServer/UpdateHub.FrontendServer.csproj" />
   </Folder>
+  <!--
+    Клиент на bash проектом C# не является, поэтому попадает в решение файлами.
+    Без этого его не видно в обозревателе решения совсем: каталог лежит рядом
+    с проектами, но студия показывает только то, что перечислено здесь.
+  -->
+  <Folder Name="/Client/">
+    <File Path="UpdateHub.Client/README.md" />
+    <File Path="UpdateHub.Client/updatehub" />
+    <File Path="UpdateHub.Client/install.sh" />
+    <File Path="UpdateHub.Client/etc/updatehub.conf.example" />
+    <File Path="UpdateHub.Client/lib/auth.sh" />
+    <File Path="UpdateHub.Client/lib/commands.sh" />
+    <File Path="UpdateHub.Client/lib/common.sh" />
+    <File Path="UpdateHub.Client/lib/config.sh" />
+    <File Path="UpdateHub.Client/lib/download.sh" />
+    <File Path="UpdateHub.Client/lib/http.sh" />
+    <File Path="UpdateHub.Client/lib/identity.sh" />
+    <File Path="UpdateHub.Client/lib/manifest.sh" />
+    <File Path="UpdateHub.Client/systemd/updatehub.service" />
+    <File Path="UpdateHub.Client/systemd/updatehub.timer" />
+    <File Path="UpdateHub.Client/tests/run-tests.sh" />
+    <File Path="UpdateHub.Client/tests/fake-server.py" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Dockerfile" />
+    <File Path="Makefile" />
+    <File Path="dotnet.config" />
+    <File Path=".editorconfig" />
+    <File Path="docs/proverka-v-docker.md" />
+  </Folder>
   <Project Path="UpdateHub.Shared/UpdateHub.Shared.csproj" />
 </Solution>

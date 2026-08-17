@@ -198,6 +198,60 @@
         Копии снимаются по расписанию. Кнопка нужна перед тем, как что-то менять
         руками: в такой момент ждать до ночи неразумно.
     </p>
+
+    @if (_maintenance is not null)
+    {
+        <table>
+            <tbody>
+                <tr>
+                    <th>Последняя удачная копия</th>
+                    <td>
+                        @if (_maintenance.LastSuccessAt is null)
+                        {
+                            <span class="trevoga">с момента запуска ни одной</span>
+                        }
+                        else
+                        {
+                            @($"{FormatMoment(_maintenance.LastSuccessAt)}, {FormatSize(_maintenance.LastSuccessSizeBytes)}")
+                        }
+                    </td>
+                </tr>
+                @if (_maintenance.LastAttemptAt is not null && !_maintenance.LastAttemptSucceeded)
+                {
+                    <tr>
+                        <th>Последняя попытка</th>
+                        <td class="trevoga">
+                            @($"{FormatMoment(_maintenance.LastAttemptAt)} — не удалась: {_maintenance.LastAttemptError}")
+                        </td>
+                    </tr>
+                }
+                <tr>
+                    <th>Копий в каталоге</th>
+                    <td>@_maintenance.BackupFilesOnDisk</td>
+                </tr>
+                <tr>
+                    <th>Расписание</th>
+                    <td>
+                        @(_maintenance.IntervalHours > 0
+                            ? $"каждые {_maintenance.IntervalHours} ч, хранить {_maintenance.KeepCount}"
+                            : "копирование отключено настройкой")
+                    </td>
+                </tr>
+                <tr>
+                    <th>Каталог копий</th>
+                    <td>@_maintenance.BackupPath</td>
+                </tr>
+                <tr>
+                    <th>Свободно на дисках</th>
+                    <td>
+                        @($"копии — {FormatSpace(_maintenance.BackupFreeBytes, _maintenance.BackupTotalBytes)}; " +
+                          $"файлы — {FormatSpace(_maintenance.FilesFreeBytes, _maintenance.FilesTotalBytes)}")
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    }
+
     <button @onclick="CreateBackupAsync" disabled="@_busy">
         @(_busy ? "Снятие копии…" : "Снять копию сейчас")
     </button>
@@ -207,6 +261,7 @@
     private ManifestStatusResponseDto? _manifest;
     private StaleClientListResponseDto? _stale;
     private StatsResponseDto? _stats;
+    private MaintenanceStatusDto? _maintenance;
     private string? _error;
     private string? _message;
     private bool _busy;
@@ -249,6 +304,16 @@
         else
         {
             _error ??= stale.Error;
+        }
+
+        var maintenance = await Api.GetAsync<MaintenanceStatusDto>("api/v1/admin/maintenance");
+        if (maintenance.IsSuccess)
+        {
+            _maintenance = maintenance.Value;
+        }
+        else
+        {
+            _error ??= maintenance.Error;
         }
     }
 
@@ -300,6 +365,10 @@
             if (result.Value.Created)
             {
                 _message = $"{result.Value.Message}: {result.Value.Path} ({FormatSize(result.Value.SizeBytes)})";
+
+                // Сводку нужно перечитать: изменились и время последней копии,
+                // и их число в каталоге, и свободное место.
+                await LoadAsync();
             }
             else
             {
@@ -346,4 +415,21 @@
         => moment is null
             ? "не выполнялся"
             : DateTime.SpecifyKind(moment.Value, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss");
+
+    /// <summary>
+    /// Показывает свободное место вместе с долей от общего объёма.
+    /// </summary>
+    /// <param name="free">Свободно, байт; <c>null</c> — определить не удалось.</param>
+    /// <param name="total">Всего, байт; <c>null</c> — определить не удалось.</param>
+    /// <returns>Строка вида «12,3 ГБ из 100 ГБ (12%)».</returns>
+    private static string FormatSpace(long? free, long? total)
+    {
+        if (free is null || total is null || total.Value <= 0)
+        {
+            return "неизвестно";
+        }
+
+        var share = (int)(100.0 * free.Value / total.Value);
+        return $"{FormatSize(free.Value)} из {FormatSize(total.Value)} ({share}%)";
+    }
 }

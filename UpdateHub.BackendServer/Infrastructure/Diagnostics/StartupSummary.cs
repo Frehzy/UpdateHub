@@ -51,7 +51,42 @@ public static class StartupSummary
             }
         }
 
+        AppendBootstrapAdmin(report, app.Services.GetRequiredService<BootstrapReport>());
+
         logger.LogInformation("{Summary}", report.ToString());
+    }
+
+    /// <summary>
+    /// Добавляет в сводку учётные данные администратора, созданного этим запуском.
+    /// </summary>
+    /// <param name="report">Приёмник текста.</param>
+    /// <param name="bootstrap">Сводка первого запуска.</param>
+    /// <remarks>
+    /// Раздел появляется только при первом запуске на пустой базе. При обычных
+    /// запусках его нет: печатать логин администратора каждый раз незачем,
+    /// а пароль сервер и не помнит — в базе лежит только его хэш.
+    /// </remarks>
+    private static void AppendBootstrapAdmin(StringBuilder report, BootstrapReport bootstrap)
+    {
+        if (!bootstrap.AdminCreated)
+        {
+            return;
+        }
+
+        report.Append("\n  ПЕРВЫЙ ЗАПУСК. Создана учётная запись администратора:\n");
+        report.Append("    Логин:          ").Append(bootstrap.Username).Append('\n');
+
+        if (bootstrap.GeneratedPassword is not null)
+        {
+            report.Append("    Пароль:         ").Append(bootstrap.GeneratedPassword).Append('\n');
+            report.Append("    Запишите пароль: повторно узнать его нельзя, в базе лежит только хэш.\n");
+        }
+        else
+        {
+            report.Append("    Пароль:         задан в настройках, раздел BootstrapAdmin\n");
+        }
+
+        report.Append("    Смена пароля обязательна при первом входе.\n");
     }
 
     /// <summary>
