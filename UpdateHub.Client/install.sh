@@ -12,6 +12,7 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/updatehub}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/updatehub}"
 BIN_LINK="${BIN_LINK:-/usr/local/bin/updatehub}"
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
+LOGROTATE_DIR="${LOGROTATE_DIR:-/etc/logrotate.d}"
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -40,6 +41,16 @@ else
 fi
 
 install -d -m 755 /var/lib/updatehub
+
+# Ротация журнала. Без неё файл растёт без предела: клиент дописывает в него
+# при каждом запуске, а запусков по одному в сутки годами. На машине с малым
+# диском это однажды кончится нехваткой места — на скачивании обновления.
+if [ -d "$LOGROTATE_DIR" ]; then
+    install -m 644 "$SOURCE_DIR/etc/updatehub.logrotate" "$LOGROTATE_DIR/updatehub"
+    printf 'Установлено правило ротации журнала: %s/updatehub\n' "$LOGROTATE_DIR"
+else
+    printf 'Каталог %s отсутствует, ротация журнала не настроена\n' "$LOGROTATE_DIR" >&2
+fi
 
 if [ -d "$SYSTEMD_DIR" ] && command -v systemctl >/dev/null 2>&1; then
     install -m 644 "$SOURCE_DIR/systemd/updatehub.service" "$SYSTEMD_DIR/updatehub.service"

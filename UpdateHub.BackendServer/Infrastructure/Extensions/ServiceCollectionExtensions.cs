@@ -179,6 +179,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(new PasswordHasher(workFactor));
         services.AddSingleton<TokenGenerator>();
 
+        // Ограничитель подбора пароля: счётчики общие на приложение.
+        services.AddSingleton<LoginThrottle>();
+
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>

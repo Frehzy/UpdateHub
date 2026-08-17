@@ -33,6 +33,13 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <!--
+      bUnit поднимает компоненты Blazor в памяти и даёт разобрать полученную
+      разметку. Без него панель проверялась только со стороны служб, а сама
+      разметка — ничем: обращение к пустой ссылке в шаблоне даёт пустую
+      страницу, и увидеть это можно было только глазами.
+    -->
+    <PackageReference Include="bunit" Version="2.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
       <PrivateAssets>all</PrivateAssets>
