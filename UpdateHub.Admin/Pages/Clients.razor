@@ -1,0 +1,302 @@
+@page "/clients"
+@inject ApiClient Api
+
+@*
+    Компьютеры. Здесь их заводят, распределяют по группам и блокируют.
+    Идентификатор компьютера задаёт скрипт на машине, поэтому вводится он
+    вручную и после создания не меняется: по нему привязаны и права,
+    и вся история обращений.
+*@
+
+<h1>Компьютеры</h1>
+
+@if (_error is not null)
+{
+    <div class="soobshchenie oshibka">@_error</div>
+}
+
+<div class="karta">
+    <h2>Завести компьютер</h2>
+    <div class="stroka-formy">
+        <label>
+            <span>Идентификатор</span>
+            <input @bind="_newId" @bind:event="oninput" placeholder="pc-buhgalteriya-01" />
+        </label>
+        <label>
+            <span>Группа</span>
+            <select @bind="_newGroupId">
+                <option value="">без группы</option>
+                @foreach (var group in _groups)
+                {
+                    <option value="@group.Id">@group.Name</option>
+                }
+            </select>
+        </label>
+        <button @onclick="CreateAsync" disabled="@(_busy || _newId.Length == 0)">Завести</button>
+    </div>
+</div>
+
+<div class="karta">
+    <div class="stroka-formy">
+        <label>
+            <span>Поиск по идентификатору или имени машины</span>
+            <input @bind="_search" @bind:event="oninput" @bind:after="LoadClientsAsync" />
+        </label>
+    </div>
+</div>
+
+@if (_clients is null)
+{
+    <p class="tusklyy">Загрузка…</p>
+}
+else if (_clients.Count == 0)
+{
+    <p class="tusklyy">Ни одного компьютера не найдено.</p>
+}
+else
+{
+    <div class="tablica-obolochka">
+        <table>
+            <thead>
+                <tr>
+                    <th>Идентификатор</th>
+                    <th>Имя машины</th>
+                    <th>Система</th>
+                    <th>Адрес</th>
+                    <th>Группа</th>
+                    <th>Последняя связь</th>
+                    <th>Состояние</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var client in _clients)
+                {
+                    <tr>
+                        <td>@client.Id</td>
+                        <td>@client.Name</td>
+                        <td>@(client.OsVersion ?? "—")</td>
+                        <td>@(client.IpAddress ?? "—")</td>
+                        <td>
+                            <select value="@(client.GroupId ?? string.Empty)"
+                                    @onchange="@(e => MoveToGroupAsync(client, (string?)e.Value))">
+                                <option value="">без группы</option>
+                                @foreach (var group in _groups)
+                                {
+                                    <option value="@group.Id">@group.Name</option>
+                                }
+                            </select>
+                        </td>
+                        <td>@FormatMoment(client.LastSeen)</td>
+                        <td>
+                            @if (client.IsBlocked)
+                            {
+                                <span class="metka zablokirovan">заблокирован</span>
+                            }
+                            else
+                            {
+                                <span class="metka rabotaet">работает</span>
+                            }
+                        </td>
+                        <td>
+                            @if (client.IsBlocked)
+                            {
+                                <button class="vtorichnaya" disabled="@_busy"
+                                        @onclick="@(() => UnblockAsync(client))">Разблокировать</button>
+                            }
+                            else
+                            {
+                                <button class="vtorichnaya" disabled="@_busy"
+                                        @onclick="@(() => StartBlock(client))">Заблокировать</button>
+                            }
+                            <button class="opasnaya" disabled="@_busy"
+                                    @onclick="@(() => DeleteAsync(client))">Удалить</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (_blocking is not null)
+{
+    <div class="karta">
+        <h2>Блокировка компьютера @_blocking.Id</h2>
+        <div class="stroka-formy">
+            <label>
+                <span>Причина — её увидит человек за этой машиной</span>
+                <input @bind="_blockReason" @bind:event="oninput" placeholder="Выведен из эксплуатации" />
+            </label>
+            <button @onclick="ConfirmBlockAsync" disabled="@(_busy || _blockReason.Length == 0)">Заблокировать</button>
+            <button class="vtorichnaya" @onclick="@(() => _blocking = null)">Отмена</button>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ClientResponseDto>? _clients;
+    private List<GroupResponseDto> _groups = [];
+    private ClientResponseDto? _blocking;
+    private string _search = string.Empty;
+    private string _newId = string.Empty;
+    private string _newGroupId = string.Empty;
+    private string _blockReason = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    /// <summary>Загружает группы и компьютеры.</summary>
+    /// <returns>Задача завершения.</returns>
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGroupsAsync();
+        await LoadClientsAsync();
+    }
+
+    /// <summary>Читает список групп — он нужен для выпадающих списков.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task LoadGroupsAsync()
+    {
+        var result = await Api.GetAsync<GroupListResponseDto>("api/v1/admin/groups");
+        if (result.IsSuccess && result.Value is not null)
+        {
+            _groups = result.Value.Groups;
+        }
+    }
+
+    /// <summary>Читает список компьютеров с учётом строки поиска.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task LoadClientsAsync()
+    {
+        var url = _search.Length > 0
+            ? $"api/v1/admin/clients?search={Uri.EscapeDataString(_search)}"
+            : "api/v1/admin/clients";
+
+        var result = await Api.GetAsync<ClientListResponseDto>(url);
+
+        if (result.IsSuccess && result.Value is not null)
+        {
+            _clients = result.Value.Clients;
+            _error = null;
+        }
+        else
+        {
+            _error = result.Error;
+        }
+    }
+
+    /// <summary>Заводит компьютер.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task CreateAsync()
+    {
+        _busy = true;
+
+        var request = new CreateClientRequestDto
+        {
+            ClientId = _newId.Trim(),
+            GroupId = _newGroupId.Length > 0 ? _newGroupId : null
+        };
+
+        var result = await Api.PostAsync("api/v1/admin/clients", request);
+        _error = result.Error;
+
+        if (result.IsSuccess)
+        {
+            _newId = string.Empty;
+            _newGroupId = string.Empty;
+            await LoadClientsAsync();
+        }
+
+        _busy = false;
+    }
+
+    /// <summary>Переносит компьютер в другую группу.</summary>
+    /// <param name="client">Компьютер.</param>
+    /// <param name="groupId">Идентификатор группы или пустая строка.</param>
+    /// <returns>Задача завершения.</returns>
+    private async Task MoveToGroupAsync(ClientResponseDto client, string? groupId)
+    {
+        _busy = true;
+
+        var request = new UpdateClientRequestDto
+        {
+            GroupId = string.IsNullOrEmpty(groupId) ? null : groupId
+        };
+
+        var result = await Api.PutAsync($"api/v1/admin/clients/{client.Id}", request);
+        _error = result.Error;
+
+        await LoadClientsAsync();
+        _busy = false;
+    }
+
+    /// <summary>Открывает форму блокировки.</summary>
+    /// <param name="client">Компьютер.</param>
+    private void StartBlock(ClientResponseDto client)
+    {
+        _blocking = client;
+        _blockReason = string.Empty;
+    }
+
+    /// <summary>Выполняет блокировку с указанной причиной.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task ConfirmBlockAsync()
+    {
+        if (_blocking is null)
+        {
+            return;
+        }
+
+        _busy = true;
+
+        var result = await Api.PostAsync(
+            $"api/v1/admin/clients/{_blocking.Id}/block",
+            new BlockClientRequestDto { Reason = _blockReason });
+
+        _error = result.Error;
+
+        if (result.IsSuccess)
+        {
+            _blocking = null;
+            await LoadClientsAsync();
+        }
+
+        _busy = false;
+    }
+
+    /// <summary>Снимает блокировку.</summary>
+    /// <param name="client">Компьютер.</param>
+    /// <returns>Задача завершения.</returns>
+    private async Task UnblockAsync(ClientResponseDto client)
+    {
+        _busy = true;
+
+        var result = await Api.PostAsync($"api/v1/admin/clients/{client.Id}/unblock");
+        _error = result.Error;
+
+        await LoadClientsAsync();
+        _busy = false;
+    }
+
+    /// <summary>Удаляет компьютер.</summary>
+    /// <param name="client">Компьютер.</param>
+    /// <returns>Задача завершения.</returns>
+    private async Task DeleteAsync(ClientResponseDto client)
+    {
+        _busy = true;
+
+        var result = await Api.DeleteAsync($"api/v1/admin/clients/{client.Id}");
+        _error = result.Error;
+
+        await LoadClientsAsync();
+        _busy = false;
+    }
+
+    /// <summary>Показывает момент времени или прочерк.</summary>
+    /// <param name="moment">Момент времени в UTC.</param>
+    /// <returns>Строка для показа.</returns>
+    private static string FormatMoment(DateTime? moment)
+        => moment is null
+            ? "—"
+            : DateTime.SpecifyKind(moment.Value, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+}

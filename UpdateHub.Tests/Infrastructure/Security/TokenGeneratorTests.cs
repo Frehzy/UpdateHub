@@ -4,6 +4,7 @@ using System.Security.Claims;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Domain.Enums;
 using UpdateHub.Server.Infrastructure.Security;
+using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Tests.Infrastructure.Security;
 

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.OpenApi;
 using System.IO.Compression;
 using System.Reflection;
+using System.Text.Json.Serialization;
 using UpdateHub.Server.Api.V1.Mappers;
 using UpdateHub.Server.Infrastructure.Database;
 using UpdateHub.Server.Infrastructure.Diagnostics;
@@ -23,7 +24,11 @@ builder.Services.AddApplicationServices();
 builder.Services.AddSecurity(builder.Configuration);
 
 builder.Services.AddAutoMapper(options => options.AddProfile<MappingProfile>());
-builder.Services.AddControllers();
+// Перечисления в теле запроса принимаются по имени, а не по номеру:
+// панель управления посылает "Admin", и разбирать на той стороне порядок
+// объявления значений было бы источником трудноуловимых ошибок.
+builder.Services.AddControllers()
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 
 // Манифест и планы синхронизации — текст, который сжимается примерно в восемь раз.
@@ -106,6 +111,12 @@ if (app.Environment.IsDevelopment())
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseResponseCompression();
 
+// Панель управления — приложение Blazor WebAssembly, собранное в статические
+// файлы. Отдаёт их тот же сервер: отдельный веб-сервер в закрытом контуре — это
+// ещё один образ, ещё один порт в межсетевом экране и ещё одна настройка CORS.
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -113,7 +124,35 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health").AllowAnonymous();
 
+// Неизвестный адрес под /api — это ошибка обращения, и отвечать на неё нужно
+// честным 404 текстом. Правило объявлено раньше отката на index.html и точнее
+// его, поэтому выигрывает: иначе bash-скрипт получил бы в ответ HTML-страницу
+// с кодом 200 и решил бы, что всё в порядке.
+app.MapFallback("/api/{**path}", () => Results.Text(
+    "error=Адрес не найден\n",
+    "text/plain; charset=utf-8",
+    null,
+    StatusCodes.Status404NotFound));
+
+// Все остальные адреса отдают страницу панели: маршруты внутри неё разбирает
+// уже браузер, и при обновлении страницы на /clients сервер обязан вернуть
+// то же приложение, а не 404.
+app.MapFallbackToFile("index.html");
+
 // Сводка печатается после старта: до этого момента Kestrel ещё не назначил адреса.
 app.Lifetime.ApplicationStarted.Register(() => StartupSummary.Log(app));
 
 app.Run();
+
+/// <summary>
+/// Точка входа приложения.
+/// </summary>
+/// <remarks>
+/// Класс объявлен явно только ради тестов. Программа написана операторами
+/// верхнего уровня, и компилятор порождает для неё класс <c>Program</c>
+/// с внутренней областью видимости. Интеграционным тестам он нужен как
+/// параметр типа: <c>WebApplicationFactory&lt;Program&gt;</c> поднимает
+/// приложение целиком — с настоящей маршрутизацией, проверкой токенов
+/// и подготовкой базы, — и обращается к точке входа по имени типа.
+/// </remarks>
+public partial class Program;

@@ -1,0 +1,156 @@
+@page "/groups"
+@inject ApiClient Api
+
+@*
+    Группы компьютеров. Нужны ради прав: выдать пользователю группу проще,
+    чем перечислять её машины по одной, а при добавлении нового компьютера
+    в группу право распространяется на него само.
+*@
+
+<h1>Группы</h1>
+
+@if (_error is not null)
+{
+    <div class="soobshchenie oshibka">@_error</div>
+}
+
+<div class="karta">
+    <h2>Завести группу</h2>
+    <div class="stroka-formy">
+        <label>
+            <span>Название</span>
+            <input @bind="_newName" @bind:event="oninput" placeholder="Бухгалтерия" />
+        </label>
+        <label>
+            <span>Описание</span>
+            <input @bind="_newDescription" @bind:event="oninput" />
+        </label>
+        <button @onclick="CreateAsync" disabled="@(_busy || _newName.Length == 0)">Завести</button>
+    </div>
+</div>
+
+@if (_groups is null)
+{
+    <p class="tusklyy">Загрузка…</p>
+}
+else if (_groups.Count == 0)
+{
+    <p class="tusklyy">Групп пока нет.</p>
+}
+else
+{
+    <div class="tablica-obolochka">
+        <table>
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Описание</th>
+                    <th>Компьютеров</th>
+                    <th>Заведена</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var group in _groups)
+                {
+                    <tr>
+                        <td>@group.Name</td>
+                        <td>@(string.IsNullOrEmpty(group.Description) ? "—" : group.Description)</td>
+                        <td>@group.ClientCount</td>
+                        <td>@FormatMoment(group.CreatedAt)</td>
+                        <td>
+                            <button class="opasnaya" disabled="@_busy"
+                                    @onclick="@(() => DeleteAsync(group))">Удалить</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <p class="tusklyy">
+        Удаление группы компьютеры не трогает: они просто остаются без группы.
+        Права, выданные на группу, при этом перестают действовать.
+    </p>
+}
+
+@code {
+    private List<GroupResponseDto>? _groups;
+    private string _newName = string.Empty;
+    private string _newDescription = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    /// <summary>Загружает список групп.</summary>
+    /// <returns>Задача завершения.</returns>
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    /// <summary>Читает группы с сервера.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task LoadAsync()
+    {
+        var result = await Api.GetAsync<GroupListResponseDto>("api/v1/admin/groups");
+
+        if (result.IsSuccess && result.Value is not null)
+        {
+            _groups = result.Value.Groups;
+            _error = null;
+        }
+        else
+        {
+            _error = result.Error;
+        }
+    }
+
+    /// <summary>
+    /// Заводит группу.
+    /// </summary>
+    /// <returns>Задача завершения.</returns>
+    /// <remarks>
+    /// Названия обязаны различаться: по ним администратор выдаёт права,
+    /// и две «Бухгалтерии» сделали бы выдачу гаданием. Проверку выполняет
+    /// сервер, здесь остаётся показать его ответ.
+    /// </remarks>
+    private async Task CreateAsync()
+    {
+        _busy = true;
+
+        var request = new CreateGroupRequestDto
+        {
+            Name = _newName.Trim(),
+            Description = _newDescription.Length > 0 ? _newDescription : null
+        };
+
+        var result = await Api.PostAsync("api/v1/admin/groups", request);
+        _error = result.Error;
+
+        if (result.IsSuccess)
+        {
+            _newName = string.Empty;
+            _newDescription = string.Empty;
+            await LoadAsync();
+        }
+
+        _busy = false;
+    }
+
+    /// <summary>Удаляет группу.</summary>
+    /// <param name="group">Группа.</param>
+    /// <returns>Задача завершения.</returns>
+    private async Task DeleteAsync(GroupResponseDto group)
+    {
+        _busy = true;
+
+        var result = await Api.DeleteAsync($"api/v1/admin/groups/{group.Id}");
+        _error = result.Error;
+
+        await LoadAsync();
+        _busy = false;
+    }
+
+    /// <summary>Показывает дату.</summary>
+    /// <param name="moment">Момент времени в UTC.</param>
+    /// <returns>Строка для показа.</returns>
+    private static string FormatMoment(DateTime moment)
+        => DateTime.SpecifyKind(moment, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy");
+}

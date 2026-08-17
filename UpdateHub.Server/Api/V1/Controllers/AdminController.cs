@@ -1,13 +1,13 @@
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using UpdateHub.Server.Api.V1.DTOs.Request;
-using UpdateHub.Server.Api.V1.DTOs.Response;
+using AutoMapper;
 using UpdateHub.Server.Application.Abstractions.Repositories;
 using UpdateHub.Server.Application.Abstractions.Services;
 using UpdateHub.Server.Application.Manifest;
 using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Enums;
+using UpdateHub.Shared.Contracts;
+using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Server.Api.V1.Controllers;
 
@@ -64,7 +64,7 @@ public class AdminController(
             : await userRepository.GetAllAsync(cancellationToken);
 
         var response = mapper.Map<List<UserResponseDto>>(users);
-        return Ok(new { users = response, total = response.Count });
+        return Ok(new UserListResponseDto { Users = response, Total = response.Count });
     }
 
     /// <summary>Возвращает учётную запись вместе с выданными ей правами.</summary>
@@ -228,7 +228,7 @@ public class AdminController(
     {
         var clients = await clientService.GetAllAsync(groupId, isBlocked, search, cancellationToken);
         var response = mapper.Map<List<ClientResponseDto>>(clients);
-        return Ok(new { clients = response, total = response.Count });
+        return Ok(new ClientListResponseDto { Clients = response, Total = response.Count });
     }
 
     /// <summary>Возвращает подробные сведения о компьютере.</summary>
@@ -326,7 +326,7 @@ public class AdminController(
     public async Task<IActionResult> GetGroups(CancellationToken cancellationToken)
     {
         var groups = await groupService.GetAllAsync(cancellationToken);
-        return Ok(new { groups, total = groups.Count });
+        return Ok(new GroupListResponseDto { Groups = [.. groups], Total = groups.Count });
     }
 
     /// <summary>Возвращает группу вместе с её составом.</summary>
@@ -413,7 +413,7 @@ public class AdminController(
             item.MatchingClientIds = [.. matches.Select(m => m.ClientId).Where(id => id != item.ClientId)];
         }
 
-        return Ok(new { enrollments = response, total = response.Count });
+        return Ok(new EnrollmentListResponseDto { Enrollments = response, Total = response.Count });
     }
 
     /// <summary>Одобряет заявку и заводит компьютер.</summary>
@@ -480,13 +480,13 @@ public class AdminController(
             return Conflict(new ErrorResponseDto { Error = "Обход каталога уже выполняется" });
         }
 
-        return Ok(new
+        return Ok(new RescanResultDto
         {
-            status = "ok",
-            totalFiles = result.TotalFiles,
-            hashedFiles = result.HashedFiles,
-            changes = result.Changes,
-            rejectedPaths = result.RejectedPaths
+            Status = "ok",
+            TotalFiles = result.TotalFiles,
+            HashedFiles = result.HashedFiles,
+            Changes = result.Changes,
+            RejectedPaths = result.RejectedPaths
         });
     }
 

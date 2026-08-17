@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Договор между сервером и панелью управления: типы запросов и ответов
+    админского API плюс перечисления, которые в этом договоре участвуют.
+
+    Зависимостей у библиотеки нет намеренно. Ссылка на ASP.NET Core утянула
+    бы за собой веб-сервер в браузерное приложение, а ссылка на EF Core —
+    сущности базы. Сущности остаются на сервере: панели незачем знать,
+    как разложены таблицы.
+
+    Формы клиентской части (вход, заявка) сюда не переехали: они размечены
+    атрибутами MVC и нужны только bash-скрипту, а не браузеру.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

@@ -1,5 +1,6 @@
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Domain.Enums;
+using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Server.Application.Abstractions.Repositories;
 

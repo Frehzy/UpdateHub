@@ -1,0 +1,420 @@
+@page "/users"
+@inject ApiClient Api
+
+@*
+    Пользователи и их права. Право на компьютер выдаётся напрямую либо через
+    группу; без хотя бы одного права пользователь не сможет даже войти —
+    сервер отказывает намеренно, чтобы человек не гадал, почему списки пусты.
+*@
+
+<h1>Пользователи</h1>
+
+@if (_error is not null)
+{
+    <div class="soobshchenie oshibka">@_error</div>
+}
+
+@if (_message is not null)
+{
+    <div class="soobshchenie udacha">@_message</div>
+}
+
+<div class="karta">
+    <h2>Завести пользователя</h2>
+    <div class="stroka-formy">
+        <label>
+            <span>Логин</span>
+            <input @bind="_newUsername" @bind:event="oninput" />
+        </label>
+        <label>
+            <span>Пароль (не короче восьми символов)</span>
+            <input type="password" @bind="_newPassword" @bind:event="oninput" />
+        </label>
+        <label>
+            <span>Роль</span>
+            <select @bind="_newRole">
+                <option value="@nameof(UserRole.Client)">обычный пользователь</option>
+                <option value="@nameof(UserRole.Admin)">администратор</option>
+            </select>
+        </label>
+        <button @onclick="CreateAsync" disabled="@(_busy || !IsNewUserFilled)">Завести</button>
+    </div>
+</div>
+
+@if (_users is null)
+{
+    <p class="tusklyy">Загрузка…</p>
+}
+else
+{
+    <div class="tablica-obolochka">
+        <table>
+            <thead>
+                <tr>
+                    <th>Логин</th>
+                    <th>Роль</th>
+                    <th>Состояние</th>
+                    <th>Последний вход</th>
+                    <th>Права</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in _users)
+                {
+                    <tr>
+                        <td>@user.Username</td>
+                        <td>@(user.Role == nameof(UserRole.Admin) ? "администратор" : "пользователь")</td>
+                        <td>
+                            @if (user.IsActive)
+                            {
+                                <span class="metka rabotaet">работает</span>
+                            }
+                            else
+                            {
+                                <span class="metka zablokirovan">отключён</span>
+                            }
+                        </td>
+                        <td>@FormatMoment(user.LastLogin)</td>
+                        <td>@DescribeAccess(user)</td>
+                        <td>
+                            <button class="vtorichnaya" disabled="@_busy"
+                                    @onclick="@(() => SelectAsync(user))">Права</button>
+                            <button class="vtorichnaya" disabled="@_busy"
+                                    @onclick="@(() => ToggleAsync(user))">
+                                @(user.IsActive ? "Отключить" : "Включить")
+                            </button>
+                            <button class="opasnaya" disabled="@_busy"
+                                    @onclick="@(() => DeleteAsync(user))">Удалить</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (_selected is not null)
+{
+    <div class="karta">
+        <h2>Права пользователя @_selected.Username</h2>
+
+        <h3>Компьютеры</h3>
+        @if (_selected.ClientAccesses is { Count: > 0 })
+        {
+            <ul>
+                @foreach (var access in _selected.ClientAccesses)
+                {
+                    <li>
+                        @access.ClientName (@access.ClientId)
+                        <button class="vtorichnaya" disabled="@_busy"
+                                @onclick="@(() => RevokeClientAsync(access.ClientId))">Отозвать</button>
+                    </li>
+                }
+            </ul>
+        }
+        else
+        {
+            <p class="tusklyy">Прав на отдельные компьютеры нет.</p>
+        }
+
+        <div class="stroka-formy">
+            <label>
+                <span>Выдать право на компьютер</span>
+                <select @bind="_grantClientId">
+                    <option value="">выберите компьютер</option>
+                    @foreach (var client in _clients)
+                    {
+                        <option value="@client.Id">@client.Id — @client.Name</option>
+                    }
+                </select>
+            </label>
+            <button @onclick="GrantClientAsync" disabled="@(_busy || _grantClientId.Length == 0)">Выдать</button>
+        </div>
+
+        <h3>Группы</h3>
+        @if (_selected.GroupAccesses is { Count: > 0 })
+        {
+            <ul>
+                @foreach (var access in _selected.GroupAccesses)
+                {
+                    <li>
+                        @access.GroupName
+                        <button class="vtorichnaya" disabled="@_busy"
+                                @onclick="@(() => RevokeGroupAsync(access.GroupId))">Отозвать</button>
+                    </li>
+                }
+            </ul>
+        }
+        else
+        {
+            <p class="tusklyy">Прав на группы нет.</p>
+        }
+
+        <div class="stroka-formy">
+            <label>
+                <span>Выдать право на группу</span>
+                <select @bind="_grantGroupId">
+                    <option value="">выберите группу</option>
+                    @foreach (var group in _groups)
+                    {
+                        <option value="@group.Id">@group.Name</option>
+                    }
+                </select>
+            </label>
+            <button @onclick="GrantGroupAsync" disabled="@(_busy || _grantGroupId.Length == 0)">Выдать</button>
+        </div>
+
+        <button class="vtorichnaya" @onclick="@(() => _selected = null)">Закрыть</button>
+    </div>
+}
+
+@code {
+    private List<UserResponseDto>? _users;
+    private List<ClientResponseDto> _clients = [];
+    private List<GroupResponseDto> _groups = [];
+    private UserResponseDto? _selected;
+    private string _newUsername = string.Empty;
+    private string _newPassword = string.Empty;
+    private string _newRole = nameof(UserRole.Client);
+    private string _grantClientId = string.Empty;
+    private string _grantGroupId = string.Empty;
+    private string? _error;
+    private string? _message;
+    private bool _busy;
+
+    /// <summary>Заполнены ли поля нового пользователя.</summary>
+    private bool IsNewUserFilled => _newUsername.Length > 0 && _newPassword.Length >= 8;
+
+    /// <summary>Загружает пользователей, компьютеры и группы.</summary>
+    /// <returns>Задача завершения.</returns>
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsersAsync();
+
+        var clients = await Api.GetAsync<ClientListResponseDto>("api/v1/admin/clients");
+        if (clients.IsSuccess && clients.Value is not null)
+        {
+            _clients = clients.Value.Clients;
+        }
+
+        var groups = await Api.GetAsync<GroupListResponseDto>("api/v1/admin/groups");
+        if (groups.IsSuccess && groups.Value is not null)
+        {
+            _groups = groups.Value.Groups;
+        }
+    }
+
+    /// <summary>Читает список пользователей.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task LoadUsersAsync()
+    {
+        var result = await Api.GetAsync<UserListResponseDto>("api/v1/admin/users");
+
+        if (result.IsSuccess && result.Value is not null)
+        {
+            _users = result.Value.Users;
+            _error = null;
+        }
+        else
+        {
+            _error = result.Error;
+        }
+    }
+
+    /// <summary>
+    /// Открывает сведения о правах пользователя.
+    /// </summary>
+    /// <param name="user">Пользователь.</param>
+    /// <returns>Задача завершения.</returns>
+    /// <remarks>
+    /// Список пользователей приходит без выданных прав — их подтягивает
+    /// отдельный запрос по одному пользователю. Иначе на каждый показ списка
+    /// сервер поднимал бы все права всех учётных записей.
+    /// </remarks>
+    private async Task SelectAsync(UserResponseDto user)
+    {
+        _busy = true;
+
+        var result = await Api.GetAsync<UserResponseDto>($"api/v1/admin/users/{user.Id}");
+        _error = result.Error;
+        _selected = result.Value;
+        _grantClientId = string.Empty;
+        _grantGroupId = string.Empty;
+
+        _busy = false;
+    }
+
+    /// <summary>Заводит пользователя.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _message = null;
+
+        var request = new CreateUserRequestDto
+        {
+            Username = _newUsername.Trim(),
+            Password = _newPassword,
+            Role = _newRole == nameof(UserRole.Admin) ? UserRole.Admin : UserRole.Client
+        };
+
+        var result = await Api.PostAsync("api/v1/admin/users", request);
+        _error = result.Error;
+
+        if (result.IsSuccess)
+        {
+            _message = _newRole == nameof(UserRole.Admin)
+                ? $"Администратор «{_newUsername}» заведён."
+                : $"Пользователь «{_newUsername}» заведён. Выдайте ему права, иначе он не сможет войти.";
+
+            _newUsername = string.Empty;
+            _newPassword = string.Empty;
+            await LoadUsersAsync();
+        }
+
+        _busy = false;
+    }
+
+    /// <summary>Включает или отключает учётную запись.</summary>
+    /// <param name="user">Пользователь.</param>
+    /// <returns>Задача завершения.</returns>
+    private async Task ToggleAsync(UserResponseDto user)
+    {
+        _busy = true;
+
+        var result = await Api.PutAsync(
+            $"api/v1/admin/users/{user.Id}/status",
+            new ToggleUserStatusRequestDto { IsActive = !user.IsActive });
+
+        _error = result.Error;
+
+        await LoadUsersAsync();
+        _busy = false;
+    }
+
+    /// <summary>Удаляет пользователя.</summary>
+    /// <param name="user">Пользователь.</param>
+    /// <returns>Задача завершения.</returns>
+    private async Task DeleteAsync(UserResponseDto user)
+    {
+        _busy = true;
+
+        var result = await Api.DeleteAsync($"api/v1/admin/users/{user.Id}");
+        _error = result.Error;
+
+        if (_selected?.Id == user.Id)
+        {
+            _selected = null;
+        }
+
+        await LoadUsersAsync();
+        _busy = false;
+    }
+
+    /// <summary>Выдаёт право на компьютер.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task GrantClientAsync()
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        var result = await Api.PutAsync($"api/v1/admin/users/{_selected.Id}/clients/{_grantClientId}");
+        _error = result.Error;
+        _busy = false;
+
+        await ReloadSelectedAsync();
+    }
+
+    /// <summary>Отзывает право на компьютер.</summary>
+    /// <param name="clientId">Идентификатор компьютера.</param>
+    /// <returns>Задача завершения.</returns>
+    private async Task RevokeClientAsync(string clientId)
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        var result = await Api.DeleteAsync($"api/v1/admin/users/{_selected.Id}/clients/{clientId}");
+        _error = result.Error;
+        _busy = false;
+
+        await ReloadSelectedAsync();
+    }
+
+    /// <summary>Выдаёт право на группу.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task GrantGroupAsync()
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        var result = await Api.PutAsync($"api/v1/admin/users/{_selected.Id}/groups/{_grantGroupId}");
+        _error = result.Error;
+        _busy = false;
+
+        await ReloadSelectedAsync();
+    }
+
+    /// <summary>Отзывает право на группу.</summary>
+    /// <param name="groupId">Идентификатор группы.</param>
+    /// <returns>Задача завершения.</returns>
+    private async Task RevokeGroupAsync(string groupId)
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        var result = await Api.DeleteAsync($"api/v1/admin/users/{_selected.Id}/groups/{groupId}");
+        _error = result.Error;
+        _busy = false;
+
+        await ReloadSelectedAsync();
+    }
+
+    /// <summary>Перечитывает выбранного пользователя и список.</summary>
+    /// <returns>Задача завершения.</returns>
+    private async Task ReloadSelectedAsync()
+    {
+        if (_selected is not null)
+        {
+            await SelectAsync(_selected);
+        }
+
+        await LoadUsersAsync();
+    }
+
+    /// <summary>Кратко описывает выданные права.</summary>
+    /// <param name="user">Пользователь.</param>
+    /// <returns>Строка для показа в таблице.</returns>
+    private static string DescribeAccess(UserResponseDto user)
+    {
+        if (user.Role == nameof(UserRole.Admin))
+        {
+            return "все компьютеры";
+        }
+
+        var clients = user.ClientAccesses?.Count ?? 0;
+        var groups = user.GroupAccesses?.Count ?? 0;
+
+        return clients + groups == 0 ? "нет" : $"компьютеров: {clients}, групп: {groups}";
+    }
+
+    /// <summary>Показывает момент времени или прочерк.</summary>
+    /// <param name="moment">Момент времени в UTC.</param>
+    /// <returns>Строка для показа.</returns>
+    private static string FormatMoment(DateTime? moment)
+        => moment is null
+            ? "—"
+            : DateTime.SpecifyKind(moment.Value, DateTimeKind.Utc).ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+}

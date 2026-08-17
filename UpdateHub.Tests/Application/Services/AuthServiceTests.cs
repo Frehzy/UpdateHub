@@ -6,6 +6,7 @@ using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Domain.Enums;
 using UpdateHub.Server.Infrastructure.Security;
+using UpdateHub.Shared.Enums;
 using UpdateHub.Tests.TestSupport;
 
 namespace UpdateHub.Tests.Application.Services;

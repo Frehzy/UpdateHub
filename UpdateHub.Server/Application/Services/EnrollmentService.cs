@@ -3,6 +3,7 @@ using UpdateHub.Server.Application.Abstractions.Services;
 using UpdateHub.Server.Application.Sync;
 using UpdateHub.Server.Domain.Entities;
 using UpdateHub.Server.Domain.Enums;
+using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Server.Application.Services;
 

@@ -1,4 +1,5 @@
 using UpdateHub.Server.Domain.Enums;
+using UpdateHub.Shared.Enums;
 
 namespace UpdateHub.Server.Domain.Entities;
 

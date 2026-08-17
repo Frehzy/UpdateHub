@@ -1,0 +1,16 @@
+@*
+    Корневой компонент. Маршрутизацию выполняет браузер, а сервер на любой
+    неизвестный адрес отдаёт ту же страницу — поэтому обновление страницы
+    на /clients возвращает панель, а не ошибку.
+*@
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <h1>Страница не найдена</h1>
+            <p>Такого раздела в панели управления нет.</p>
+        </LayoutView>
+    </NotFound>
+</Router>

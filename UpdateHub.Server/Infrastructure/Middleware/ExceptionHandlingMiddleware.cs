@@ -1,6 +1,6 @@
 using System.Text.Json;
-using UpdateHub.Server.Api.V1.DTOs.Response;
 using UpdateHub.Server.Application.Sync;
+using UpdateHub.Shared.Contracts;
 
 namespace UpdateHub.Server.Infrastructure.Middleware;
 
