@@ -1,6 +1,7 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Clients;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Enrollments;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Users;
@@ -11,8 +12,11 @@ using UpdateHub.BackendServer.Application.Abstractions.Services.Manifest;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Updates;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Users;
 using UpdateHub.BackendServer.Application.BackgroundServices;
+using UpdateHub.BackendServer.Application.Maintenance;
 using UpdateHub.BackendServer.Application.Manifest;
 using UpdateHub.BackendServer.Application.Sync;
+using UpdateHub.BackendServer.Infrastructure.Configuration;
+using UpdateHub.BackendServer.Infrastructure.Diagnostics;
 using UpdateHub.Shared.Contracts.Clients;
 using UpdateHub.Shared.Contracts.Common;
 using UpdateHub.Shared.Contracts.Enrollments;
@@ -32,9 +36,11 @@ namespace UpdateHub.BackendServer.Api.V1.Controllers;
 /// <param name="authService">Создание учётных записей.</param>
 /// <param name="statisticsService">Сводная статистика.</param>
 /// <param name="backupService">Внеочередная резервная копия базы.</param>
+/// <param name="backupState">Состояние резервного копирования.</param>
 /// <param name="enrollmentService">Рассмотрение заявок.</param>
 /// <param name="manifestScanService">Пересборка манифеста.</param>
 /// <param name="manifestState">Состояние манифеста.</param>
+/// <param name="config">Настройки: пути к каталогам и параметры копирования.</param>
 /// <param name="userRepository">Доступ к учётным записям.</param>
 /// <param name="refreshTokenRepository">Доступ к refresh-токенам.</param>
 /// <param name="enrollmentRepository">Доступ к заявкам.</param>
@@ -55,9 +61,11 @@ public class AdminController(
     IAuthService authService,
     IStatisticsService statisticsService,
     BackupBackgroundService backupService,
+    BackupState backupState,
     IEnrollmentService enrollmentService,
     IManifestScanService manifestScanService,
     ManifestState manifestState,
+    IOptions<UpdateHubConfig> config,
     IUserRepository userRepository,
     IRefreshTokenRepository refreshTokenRepository,
     IEnrollmentRequestRepository enrollmentRepository,
@@ -559,5 +567,59 @@ public class AdminController(
             SizeBytes = new FileInfo(path).Length,
             Message = "Копия снята"
         });
+    }
+
+    /// <summary>
+    /// Возвращает состояние обслуживания: резервные копии и место на дисках.
+    /// </summary>
+    /// <returns>Сводка обслуживания.</returns>
+    /// <remarks>
+    /// Заведено потому, что узнать о работе копирования было нельзя иначе как
+    /// заглянув в папку на сервере. Служба при неудаче не роняет сервер, и это
+    /// верно — раздача файлов важнее копий, — но означает, что отказавшее
+    /// копирование остаётся незамеченным до того дня, когда копия понадобится.
+    /// <para>
+    /// Место на дисках отдаётся здесь же и только администратору: клиенту знать
+    /// о хозяйстве сервера незачем, он приходит за файлами.
+    /// </para>
+    /// </remarks>
+    [HttpGet("maintenance")]
+    public IActionResult GetMaintenanceStatus()
+    {
+        var backupDirectory = config.Value.ResolvedBackupPath;
+
+        var (backupFree, backupTotal) = DiskSpace.Measure(backupDirectory);
+        var (filesFree, filesTotal) = DiskSpace.Measure(config.Value.ResolvedFilesPath);
+
+        var status = new MaintenanceStatusDto
+        {
+            LastAttemptAt = backupState.Last?.At,
+            LastAttemptSucceeded = backupState.Last?.Succeeded ?? false,
+            LastAttemptError = backupState.Last?.Error,
+
+            LastSuccessAt = backupState.LastSuccess?.At,
+            LastSuccessSizeBytes = backupState.LastSuccess?.SizeBytes ?? 0,
+            LastSuccessPath = backupState.LastSuccess?.Path,
+
+            SuccessCount = backupState.SuccessCount,
+            FailureCount = backupState.FailureCount,
+
+            // Число файлов берётся с диска, а не из счётчика попыток: только оно
+            // переживает перезапуск сервера и показывает настоящий запас копий.
+            BackupFilesOnDisk = Directory.Exists(backupDirectory)
+                ? Directory.GetFiles(backupDirectory, "updatehub-*.db").Length
+                : 0,
+
+            BackupPath = backupDirectory,
+            IntervalHours = config.Value.BackupIntervalHours,
+            KeepCount = config.Value.BackupKeepCount,
+
+            BackupFreeBytes = backupFree,
+            BackupTotalBytes = backupTotal,
+            FilesFreeBytes = filesFree,
+            FilesTotalBytes = filesTotal
+        };
+
+        return Ok(status);
     }
 }

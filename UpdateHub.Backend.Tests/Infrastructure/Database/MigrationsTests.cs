@@ -8,6 +8,7 @@ using UpdateHub.BackendServer.Application.Repositories.Users;
 using UpdateHub.BackendServer.Domain.Entities.Users;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 using UpdateHub.BackendServer.Infrastructure.Database;
+using UpdateHub.BackendServer.Infrastructure.Diagnostics;
 using UpdateHub.BackendServer.Infrastructure.Security;
 using UpdateHub.Shared.Enums;
 
@@ -200,6 +201,7 @@ public class MigrationsTests
                     DatabasePath = Path.Combine(databaseDirectory, "updatehub.db")
                 }),
                 Options.Create(new BootstrapAdminSettings()),
+                new BootstrapReport(),
                 NullLogger<DatabaseInitializer>.Instance);
 
             await initializer.InitializeAsync();

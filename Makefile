@@ -35,6 +35,11 @@ DATA_VOLUME = updatehub-data
 # блокировки файлов здесь ни при чём.
 BACKUP_DIR = $(CURDIR)/backup
 
+# Часовой пояс контейнера. В образе его нет, поэтому по умолчанию там UTC —
+# и «серверное время» в сводке по дням означало бы UTC. Поставьте свой пояс:
+# список имён — в /usr/share/zoneinfo.
+TZ ?= Asia/Novosibirsk
+
 # Журнал контейнера ограничен по размеру: драйвер json-file по умолчанию
 # растёт без предела, а сервер работает годами, и к нему не ходят.
 #
@@ -73,6 +78,7 @@ run:
 		-v $(DATA_VOLUME):/app/data \
 		-v "$(BACKUP_DIR)":/app/backup \
 		-e ASPNETCORE_ENVIRONMENT=Production \
+		-e TZ="$(TZ)" \
 		-e Jwt__SecretKey="$(JWT_SECRET)" \
 		-e UpdateHub__FilesPath=/app/files \
 		-e UpdateHub__DatabasePath=/app/data/updatehub.db \

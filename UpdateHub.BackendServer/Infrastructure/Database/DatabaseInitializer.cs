@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using UpdateHub.BackendServer.Application.Abstractions.Repositories.Users;
 using UpdateHub.BackendServer.Domain.Entities.Users;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
+using UpdateHub.BackendServer.Infrastructure.Diagnostics;
 using UpdateHub.BackendServer.Infrastructure.Security;
 using UpdateHub.Shared.Enums;
 
@@ -21,6 +22,7 @@ namespace UpdateHub.BackendServer.Infrastructure.Database;
 /// <param name="passwordHasher">Хэширование паролей.</param>
 /// <param name="config">Настройки раздачи.</param>
 /// <param name="bootstrapAdmin">Учётные данные первого администратора.</param>
+/// <param name="bootstrapReport">Сводка первого запуска для вывода при старте.</param>
 /// <param name="logger">Журнал.</param>
 public class DatabaseInitializer(
     AppDbContext context,
@@ -28,6 +30,7 @@ public class DatabaseInitializer(
     PasswordHasher passwordHasher,
     IOptions<UpdateHubConfig> config,
     IOptions<BootstrapAdminSettings> bootstrapAdmin,
+    BootstrapReport bootstrapReport,
     ILogger<DatabaseInitializer> logger)
 {
     private readonly UpdateHubConfig _config = config.Value;
@@ -189,20 +192,14 @@ public class DatabaseInitializer(
 
         await userRepository.CreateAsync(admin, cancellationToken);
 
-        if (generated)
-        {
-            logger.LogWarning(
-                "Создан администратор '{Username}' со сгенерированным паролем: {Password}. " +
-                "Запишите его — повторно узнать пароль нельзя. Смена пароля обязательна при первом входе",
-                admin.Username,
-                password);
-        }
-        else
-        {
-            logger.LogInformation(
-                "Создан администратор '{Username}' с паролем из конфигурации. Смена пароля обязательна при первом входе",
-                admin.Username);
-        }
+        // Учётные данные показывает сводка старта, а не эта строка: там их видно
+        // в общей рамке, в конце вывода. Пароль из настроек в сводку не попадает,
+        // поэтому здесь достаточно отметить сам факт создания.
+        bootstrapReport.AdminWasCreated(admin.Username, generated ? password : null);
+
+        logger.LogInformation(
+            "Создан администратор '{Username}'. Смена пароля обязательна при первом входе",
+            admin.Username);
     }
 
     /// <summary>

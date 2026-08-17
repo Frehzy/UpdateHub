@@ -16,6 +16,7 @@ using UpdateHub.BackendServer.Application.Abstractions.Services.Manifest;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Updates;
 using UpdateHub.BackendServer.Application.Abstractions.Services.Users;
 using UpdateHub.BackendServer.Application.BackgroundServices;
+using UpdateHub.BackendServer.Application.Maintenance;
 using UpdateHub.BackendServer.Application.Manifest;
 using UpdateHub.BackendServer.Application.Repositories.Clients;
 using UpdateHub.BackendServer.Application.Repositories.Enrollments;
@@ -31,6 +32,7 @@ using UpdateHub.BackendServer.Application.Services.Updates;
 using UpdateHub.BackendServer.Application.Services.Users;
 using UpdateHub.BackendServer.Infrastructure.Configuration;
 using UpdateHub.BackendServer.Infrastructure.Database;
+using UpdateHub.BackendServer.Infrastructure.Diagnostics;
 using UpdateHub.BackendServer.Infrastructure.Security;
 
 namespace UpdateHub.BackendServer.Infrastructure.Extensions;
@@ -77,6 +79,10 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<AppDbContext>(options => options.UseSqlite(connectionString));
         services.AddScoped<DatabaseInitializer>();
 
+        // Сводку первого запуска заполняет подготовка базы, а печатает вывод
+        // после старта: экземпляр обязан быть один на всё приложение.
+        services.AddSingleton<BootstrapReport>();
+
         return services;
     }
 
@@ -119,6 +125,10 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddSingleton<ManifestState>();
+
+        // Состояние копирования читает панель управления, а пишет фоновая
+        // служба: экземпляр общий, как и у состояния манифеста.
+        services.AddSingleton<BackupState>();
 
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IClientAccessService, ClientAccessService>();
